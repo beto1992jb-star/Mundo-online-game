@@ -1,33 +1,49 @@
-// Configuración básica del juego MMORPG
+// ==========================================
+// MUNDO ONLINE - Motor 3D estilo MU Online
+// ==========================================
+
 let scene, camera, renderer, player;
 let targetPosition = null;
 let targetEnemy = null;
 
-// Datos del jugador
+// Stats del Jugador
 let playerStats = {
-  name: "Héroe",
+  name: "DarkKnight",
   level: 1,
+  hp: 100,
+  maxHp: 100,
+  mp: 50,
+  maxMp: 50,
   exp: 0,
   maxExp: 100,
+  zen: 0,
   gems: 0,
-  attackRange: 2.5,
-  damage: 25,
-  attackSpeed: 800 // Milisegundos entre ataques
+  attackRange: 2.8,
+  damage: 30,
+  attackSpeed: 700 // ms entre ataques
 };
 
 let lastAttackTime = 0;
 let enemies = [];
 
-function init() {
-  // 1. Escena
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0f0f15);
+// Tipos de Monstruos estilo Lorencia / MU Online
+const ENEMY_TYPES = [
+  { name: "Spider", color: 0xcc2222, hp: 60, exp: 40, zen: 25, scale: 1.0 },
+  { name: "Budge Dragon", color: 0xaa00aa, hp: 90, exp: 65, zen: 45, scale: 1.2 },
+  { name: "Lich", color: 0x22aa55, hp: 130, exp: 100, zen: 80, scale: 1.4 }
+];
 
-  // 2. Cámara Isométrica
+function init() {
+  // 1. Escena con ambientación estilo MU (oscura y gótica)
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0812);
+  scene.fog = new THREE.FogExp2(0x0a0812, 0.025);
+
+  // 2. Cámara Isométrica Estilo MU
   const aspect = window.innerWidth / window.innerHeight;
-  const d = 20;
+  const d = 22;
   camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-  camera.position.set(20, 20, 20);
+  camera.position.set(22, 24, 22);
   camera.lookAt(0, 0, 0);
 
   // 3. Renderizador
@@ -36,34 +52,56 @@ function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.body.appendChild(renderer.domElement);
 
-  // 4. Iluminación
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  // 4. Luces del mapa
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffd700, 0.8);
-  dirLight.position.set(10, 20, 10);
+  const dirLight = new THREE.DirectionalLight(0xffd700, 0.9);
+  dirLight.position.set(15, 25, 15);
   scene.add(dirLight);
 
-  // 5. Terreno del mapa
-  const floorGeometry = new THREE.PlaneGeometry(60, 60);
-  const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x2e3b23 });
+  // Luz focal sobre el jugador
+  const playerLight = new THREE.PointLight(0x00aaff, 1, 12);
+  playerLight.position.set(0, 3, 0);
+  scene.add(playerLight);
+
+  // 5. Terreno (Piso de Lorencia)
+  const floorGeometry = new THREE.PlaneGeometry(80, 80);
+  const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x1c2419 });
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
-  const gridHelper = new THREE.GridHelper(60, 60, 0x000000, 0x444444);
+  const gridHelper = new THREE.GridHelper(80, 40, 0x000000, 0x2a3525);
   gridHelper.position.y = 0.01;
   scene.add(gridHelper);
 
-  // 6. Personaje (Héroe)
-  const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-  const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00aaff });
-  player = new THREE.Mesh(playerGeometry, playerMaterial);
-  player.position.y = 1;
+  // 6. Personaje Principal (Dark Knight)
+  const playerGroup = new THREE.Group();
+  
+  // Cuerpo del héroe
+  const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+  const bodyMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, shininess: 80 });
+  const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+  bodyMesh.position.y = 1;
+  playerGroup.add(bodyMesh);
+
+  // Hombreras de armadura
+  const shoulderGeo = new THREE.BoxGeometry(1.4, 0.4, 0.6);
+  const shoulderMat = new THREE.MeshPhongMaterial({ color: 0xffd700 });
+  const shoulders = new THREE.Mesh(shoulderGeo, shoulderMat);
+  shoulders.position.y = 1.7;
+  playerGroup.add(shoulders);
+
+  player = playerGroup;
+  player.position.set(0, 0, 0);
   scene.add(player);
 
-  // 7. Generar Monstruos Iniciales
-  spawnEnemies(5);
+  // Vincular la luz al personaje
+  player.add(playerLight);
+
+  // 7. Generar Monstruos iniciales
+  spawnEnemies(7);
 
   // Eventos de usuario
   window.addEventListener('resize', onWindowResize, false);
@@ -74,17 +112,20 @@ function init() {
 }
 
 function spawnEnemy(x, z) {
-  const enemyGeometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-  const enemyMaterial = new THREE.MeshPhongMaterial({ color: 0xff3333 });
+  const type = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
+  
+  const enemyGeometry = new THREE.BoxGeometry(1.2 * type.scale, 1.2 * type.scale, 1.2 * type.scale);
+  const enemyMaterial = new THREE.MeshPhongMaterial({ color: type.color });
   const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
   
-  enemy.position.set(x, 0.6, z);
+  enemy.position.set(x, (1.2 * type.scale) / 2, z);
   enemy.userData = {
     id: Math.random(),
-    name: "Spider",
-    hp: 50,
-    maxHp: 50,
-    expReward: 35
+    name: type.name,
+    hp: type.hp,
+    maxHp: type.hp,
+    expReward: type.exp,
+    zenReward: type.zen
   };
 
   scene.add(enemy);
@@ -93,16 +134,15 @@ function spawnEnemy(x, z) {
 
 function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
-    const x = (Math.random() - 0.5) * 40;
-    const z = (Math.random() - 0.5) * 40;
-    if (Math.abs(x) > 5 || Math.abs(z) > 5) {
+    const x = (Math.random() - 0.5) * 60;
+    const z = (Math.random() - 0.5) * 60;
+    if (Math.abs(x) > 6 || Math.abs(z) > 6) {
       spawnEnemy(x, z);
     }
   }
 }
 
 function onPointerDown(event) {
-  // Ignorar clics sobre la interfaz de usuario
   if (event.target !== renderer.domElement) return;
 
   const raycaster = new THREE.Raycaster();
@@ -112,10 +152,15 @@ function onPointerDown(event) {
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(scene.children);
+  const intersects = raycaster.intersectObjects(scene.children, true);
 
   for (let i = 0; i < intersects.length; i++) {
-    const clickedObj = intersects[i].object;
+    let clickedObj = intersects[i].object;
+
+    // Subir en la jerarquía si el objeto pertenece a un grupo
+    while (clickedObj.parent && clickedObj.parent !== scene) {
+      clickedObj = clickedObj.parent;
+    }
 
     // Clic en un enemigo
     if (enemies.includes(clickedObj)) {
@@ -124,10 +169,10 @@ function onPointerDown(event) {
       return;
     }
 
-    // Clic en el terreno para moverse
+    // Clic en el piso para mover al personaje
     if (clickedObj !== player && !enemies.includes(clickedObj)) {
       targetPosition = intersects[i].point;
-      targetPosition.y = 1;
+      targetPosition.y = 0;
       targetEnemy = null;
       break;
     }
@@ -138,25 +183,25 @@ function animate(time) {
   requestAnimationFrame(animate);
   time = time || performance.now();
 
-  // Movimiento al punto marcado
+  // Movimiento
   if (targetPosition) {
     const distance = player.position.distanceTo(targetPosition);
-    if (distance > 0.1) {
+    if (distance > 0.2) {
       const direction = new THREE.Vector3().subVectors(targetPosition, player.position).normalize();
-      player.position.addScaledVector(direction, 0.15);
+      player.position.addScaledVector(direction, 0.16);
       updateCamera();
     } else {
       targetPosition = null;
     }
   }
 
-  // Interacción y combate con enemigos
+  // Combate
   if (targetEnemy) {
     const distanceToEnemy = player.position.distanceTo(targetEnemy.position);
 
     if (distanceToEnemy > playerStats.attackRange) {
       const direction = new THREE.Vector3().subVectors(targetEnemy.position, player.position).normalize();
-      player.position.addScaledVector(direction, 0.15);
+      player.position.addScaledVector(direction, 0.16);
       updateCamera();
     } else {
       if (time - lastAttackTime > playerStats.attackSpeed) {
@@ -170,29 +215,60 @@ function animate(time) {
 }
 
 function attackEnemy(enemy) {
-  enemy.userData.hp -= playerStats.damage;
-  
-  // Efecto visual de golpe
+  // Daño aleatorio estilo MU (ej: 25 - 35)
+  const actualDamage = playerStats.damage + Math.floor(Math.random() * 10) - 5;
+  enemy.userData.hp -= actualDamage;
+
+  showDamageText(actualDamage, enemy.position);
+
+  // Parpadeo visual al ser golpeado
+  const origColor = enemy.material.color.getHex();
   enemy.material.color.setHex(0xffffff);
   setTimeout(() => {
-    if (enemy.material) enemy.material.color.setHex(0xff3333);
-  }, 100);
+    if (enemy.material) enemy.material.color.setHex(origColor);
+  }, 90);
 
-  // Derrota del enemigo
+  // Muerte del enemigo
   if (enemy.userData.hp <= 0) {
     gainExperience(enemy.userData.expReward);
-    
+    playerStats.zen += enemy.userData.zenReward;
+
     scene.remove(enemy);
     enemies = enemies.filter(e => e !== enemy);
     targetEnemy = null;
 
-    // Respawn automático a los 3 segundos
+    updateHUD();
+
+    // Reaparición del monstruo
     setTimeout(() => {
-      const x = (Math.random() - 0.5) * 40;
-      const z = (Math.random() - 0.5) * 40;
+      const x = (Math.random() - 0.5) * 60;
+      const z = (Math.random() - 0.5) * 60;
       spawnEnemy(x, z);
-    }, 3000);
+    }, 2500);
   }
+}
+
+function showDamageText(damage, position) {
+  const div = document.createElement('div');
+  div.className = 'damage-text';
+  div.innerText = `-${damage}`;
+
+  // Proyectar posición 3D a coordenadas 2D en pantalla
+  const vector = position.clone();
+  vector.y += 1.5;
+  vector.project(camera);
+
+  const x = (vector.x * .5 + .5) * window.innerWidth;
+  const y = (-(vector.y * .5) + .5) * window.innerHeight;
+
+  div.style.left = `${x}px`;
+  div.style.top = `${y}px`;
+
+  document.body.appendChild(div);
+
+  setTimeout(() => {
+    if (div.parentNode) div.parentNode.removeChild(div);
+  }, 800);
 }
 
 function gainExperience(amount) {
@@ -201,32 +277,46 @@ function gainExperience(amount) {
   if (playerStats.exp >= playerStats.maxExp) {
     playerStats.level++;
     playerStats.exp -= playerStats.maxExp;
-    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.5);
-    playerStats.damage += 10;
-    alert(`¡HAS SUBIDO AL NIVEL ${playerStats.level}! Daño aumentado.`);
+    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.6);
+    playerStats.damage += 12;
+    playerStats.maxHp += 20;
+    playerStats.hp = playerStats.maxHp;
+
+    alert(`¡LEVEL UP! Ahora eres Nivel ${playerStats.level} en Mundo Online.`);
   }
 
   updateHUD();
 }
 
 function updateHUD() {
-  const levelElem = document.getElementById('player-level');
-  const gemsElem = document.getElementById('player-gems');
-  const expElem = document.getElementById('player-exp');
+  document.getElementById('player-level').innerText = playerStats.level;
+  document.getElementById('player-zen').innerText = playerStats.zen;
+  document.getElementById('player-gems').innerText = playerStats.gems;
 
-  if (levelElem) levelElem.innerText = playerStats.level;
-  if (gemsElem) gemsElem.innerText = playerStats.gems;
-  if (expElem) expElem.innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
+  // Actualizar Barra HP
+  const hpPercent = Math.max(0, (playerStats.hp / playerStats.maxHp) * 100);
+  document.getElementById('hp-bar').style.width = `${hpPercent}%`;
+  document.getElementById('hp-text').innerText = `${playerStats.hp} / ${playerStats.maxHp}`;
+
+  // Actualizar Barra MP
+  const mpPercent = Math.max(0, (playerStats.mp / playerStats.maxMp) * 100);
+  document.getElementById('mp-bar').style.width = `${mpPercent}%`;
+  document.getElementById('mp-text').innerText = `${playerStats.mp} / ${playerStats.maxMp}`;
+
+  // Actualizar Barra EXP
+  const expPercent = Math.min(100, (playerStats.exp / playerStats.maxExp) * 100);
+  document.getElementById('exp-bar').style.width = `${expPercent}%`;
+  document.getElementById('exp-text').innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
 }
 
 function updateCamera() {
-  camera.position.x = player.position.x + 20;
-  camera.position.z = player.position.z + 20;
+  camera.position.x = player.position.x + 22;
+  camera.position.z = player.position.z + 22;
 }
 
 function onWindowResize() {
   const aspect = window.innerWidth / window.innerHeight;
-  const d = 20;
+  const d = 22;
   camera.left = -d * aspect;
   camera.right = d * aspect;
   camera.top = d;
