@@ -34,7 +34,7 @@ const ENEMY_TYPES = [
 ];
 
 function init() {
-  // 1. Escena con ambientación estilo MU (oscura y gótica)
+  // 1. Escena
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0812);
   scene.fog = new THREE.FogExp2(0x0a0812, 0.025);
@@ -97,7 +97,6 @@ function init() {
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  // Vincular la luz al personaje
   player.add(playerLight);
 
   // 7. Generar Monstruos iniciales
@@ -157,7 +156,6 @@ function onPointerDown(event) {
   for (let i = 0; i < intersects.length; i++) {
     let clickedObj = intersects[i].object;
 
-    // Subir en la jerarquía si el objeto pertenece a un grupo
     while (clickedObj.parent && clickedObj.parent !== scene) {
       clickedObj = clickedObj.parent;
     }
@@ -215,20 +213,17 @@ function animate(time) {
 }
 
 function attackEnemy(enemy) {
-  // Daño aleatorio estilo MU (ej: 25 - 35)
   const actualDamage = playerStats.damage + Math.floor(Math.random() * 10) - 5;
   enemy.userData.hp -= actualDamage;
 
   showDamageText(actualDamage, enemy.position);
 
-  // Parpadeo visual al ser golpeado
   const origColor = enemy.material.color.getHex();
   enemy.material.color.setHex(0xffffff);
   setTimeout(() => {
     if (enemy.material) enemy.material.color.setHex(origColor);
   }, 90);
 
-  // Muerte del enemigo
   if (enemy.userData.hp <= 0) {
     gainExperience(enemy.userData.expReward);
     playerStats.zen += enemy.userData.zenReward;
@@ -239,7 +234,6 @@ function attackEnemy(enemy) {
 
     updateHUD();
 
-    // Reaparición del monstruo
     setTimeout(() => {
       const x = (Math.random() - 0.5) * 60;
       const z = (Math.random() - 0.5) * 60;
@@ -253,7 +247,6 @@ function showDamageText(damage, position) {
   div.className = 'damage-text';
   div.innerText = `-${damage}`;
 
-  // Proyectar posición 3D a coordenadas 2D en pantalla
   const vector = position.clone();
   vector.y += 1.5;
   vector.project(camera);
@@ -293,17 +286,14 @@ function updateHUD() {
   document.getElementById('player-zen').innerText = playerStats.zen;
   document.getElementById('player-gems').innerText = playerStats.gems;
 
-  // Actualizar Barra HP
   const hpPercent = Math.max(0, (playerStats.hp / playerStats.maxHp) * 100);
   document.getElementById('hp-bar').style.width = `${hpPercent}%`;
   document.getElementById('hp-text').innerText = `${playerStats.hp} / ${playerStats.maxHp}`;
 
-  // Actualizar Barra MP
   const mpPercent = Math.max(0, (playerStats.mp / playerStats.maxMp) * 100);
   document.getElementById('mp-bar').style.width = `${mpPercent}%`;
   document.getElementById('mp-text').innerText = `${playerStats.mp} / ${playerStats.maxMp}`;
 
-  // Actualizar Barra EXP
   const expPercent = Math.min(100, (playerStats.exp / playerStats.maxExp) * 100);
   document.getElementById('exp-bar').style.width = `${expPercent}%`;
   document.getElementById('exp-text').innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
