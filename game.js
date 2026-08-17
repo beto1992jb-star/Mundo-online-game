@@ -54,7 +54,7 @@ function init() {
   gridHelper.position.y = 0.01;
   scene.add(gridHelper);
 
-  // 6. Personaje (Héroe - Cilindro Azul)
+  // 6. Personaje (Héroe)
   const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
   const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00aaff });
   player = new THREE.Mesh(playerGeometry, playerMaterial);
@@ -95,7 +95,6 @@ function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
     const x = (Math.random() - 0.5) * 40;
     const z = (Math.random() - 0.5) * 40;
-    // Evitar que aparezca muy cerca del jugador al inicio
     if (Math.abs(x) > 5 || Math.abs(z) > 5) {
       spawnEnemy(x, z);
     }
@@ -115,18 +114,18 @@ function onPointerDown(event) {
   for (let i = 0; i < intersects.length; i++) {
     const clickedObj = intersects[i].object;
 
-    // Si hace clic en un enemigo
+    // Clic en un enemigo
     if (enemies.includes(clickedObj)) {
       targetEnemy = clickedObj;
-      targetPosition = null; // Priorizar ataque
+      targetPosition = null;
       return;
     }
 
-    // Si hace clic en el suelo para moverse
+    // Clic en el terreno para moverse
     if (clickedObj !== player && !enemies.includes(clickedObj)) {
       targetPosition = intersects[i].point;
       targetPosition.y = 1;
-      targetEnemy = null; // Cancelar objetivo de ataque
+      targetEnemy = null;
       break;
     }
   }
@@ -135,7 +134,7 @@ function onPointerDown(event) {
 function animate(time) {
   requestAnimationFrame(animate);
 
-  // 1. Movimiento hacia objetivo en el suelo
+  // Movimiento al punto marcado
   if (targetPosition) {
     const distance = player.position.distanceTo(targetPosition);
     if (distance > 0.1) {
@@ -147,17 +146,15 @@ function animate(time) {
     }
   }
 
-  // 2. Comportamiento al seleccionar un enemigo
+  // Interacción y combate con enemigos
   if (targetEnemy) {
     const distanceToEnemy = player.position.distanceTo(targetEnemy.position);
 
-    // Moverse hacia el enemigo si está fuera de rango
     if (distanceToEnemy > playerStats.attackRange) {
       const direction = new THREE.Vector3().subVectors(targetEnemy.position, player.position).normalize();
       player.position.addScaledVector(direction, 0.15);
       updateCamera();
     } else {
-      // Atacar si está dentro del rango y el cooldown está listo
       if (time - lastAttackTime > playerStats.attackSpeed) {
         attackEnemy(targetEnemy);
         lastAttackTime = time;
@@ -171,22 +168,18 @@ function animate(time) {
 function attackEnemy(enemy) {
   enemy.userData.hp -= playerStats.damage;
   
-  // Feedback visual de golpe (parpadeo blanco)
   enemy.material.color.setHex(0xffffff);
   setTimeout(() => {
     if (enemy.material) enemy.material.color.setHex(0xff3333);
   }, 100);
 
-  // Si el enemigo muere
   if (enemy.userData.hp <= 0) {
     gainExperience(enemy.userData.expReward);
     
-    // Eliminar de la escena y del array
     scene.remove(enemy);
     enemies = enemies.filter(e => e !== enemy);
     targetEnemy = null;
 
-    // Respawn automático después de 3 segundos
     setTimeout(() => {
       const x = (Math.random() - 0.5) * 40;
       const z = (Math.random() - 0.5) * 40;
@@ -198,12 +191,11 @@ function attackEnemy(enemy) {
 function gainExperience(amount) {
   playerStats.exp += amount;
 
-  // Subir de Nivel
   if (playerStats.exp >= playerStats.maxExp) {
     playerStats.level++;
     playerStats.exp -= playerStats.maxExp;
-    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.5); // Aumentar costo del siguiente nivel
-    playerStats.damage += 10; // Subir daño al subir de nivel
+    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.5);
+    playerStats.damage += 10;
     alert(`¡HAS SUBIDO AL NIVEL ${playerStats.level}! Daño aumentado.`);
   }
 
@@ -211,13 +203,13 @@ function gainExperience(amount) {
 }
 
 function updateHUD() {
-  document.getElementById('player-level').innerText = playerStats.level;
-  document.getElementById('player-gems').innerText = playerStats.gems;
-  
-  const expElement = document.getElementById('player-exp');
-  if (expElement) {
-    expElement.innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
-  }
+  const levelElem = document.getElementById('player-level');
+  const gemsElem = document.getElementById('player-gems');
+  const expElem = document.getElementById('player-exp');
+
+  if (levelElem) levelElem.innerText = playerStats.level;
+  if (gemsElem) gemsElem.innerText = playerStats.gems;
+  if (expElem) expElem.innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
 }
 
 function updateCamera() {
