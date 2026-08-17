@@ -1,4 +1,4 @@
-// Configuración básica del juego estilo MMORPG
+// Configuración básica del juego MMORPG
 let scene, camera, renderer, player;
 let targetPosition = null;
 let targetEnemy = null;
@@ -12,7 +12,7 @@ let playerStats = {
   gems: 0,
   attackRange: 2.5,
   damage: 25,
-  attackSpeed: 800 // ms entre ataques
+  attackSpeed: 800 // Milisegundos entre ataques
 };
 
 let lastAttackTime = 0;
@@ -33,9 +33,10 @@ function init() {
   // 3. Renderizador
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.body.appendChild(renderer.domElement);
 
-  // 4. Luces
+  // 4. Iluminación
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
@@ -69,10 +70,9 @@ function init() {
   window.addEventListener('pointerdown', onPointerDown, false);
 
   updateHUD();
-  animate();
+  animate(performance.now());
 }
 
-// Función para crear enemigos en el mapa
 function spawnEnemy(x, z) {
   const enemyGeometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
   const enemyMaterial = new THREE.MeshPhongMaterial({ color: 0xff3333 });
@@ -102,6 +102,9 @@ function spawnEnemies(count) {
 }
 
 function onPointerDown(event) {
+  // Ignorar clics sobre la interfaz de usuario
+  if (event.target !== renderer.domElement) return;
+
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
@@ -133,6 +136,7 @@ function onPointerDown(event) {
 
 function animate(time) {
   requestAnimationFrame(animate);
+  time = time || performance.now();
 
   // Movimiento al punto marcado
   if (targetPosition) {
@@ -168,11 +172,13 @@ function animate(time) {
 function attackEnemy(enemy) {
   enemy.userData.hp -= playerStats.damage;
   
+  // Efecto visual de golpe
   enemy.material.color.setHex(0xffffff);
   setTimeout(() => {
     if (enemy.material) enemy.material.color.setHex(0xff3333);
   }, 100);
 
+  // Derrota del enemigo
   if (enemy.userData.hp <= 0) {
     gainExperience(enemy.userData.expReward);
     
@@ -180,6 +186,7 @@ function attackEnemy(enemy) {
     enemies = enemies.filter(e => e !== enemy);
     targetEnemy = null;
 
+    // Respawn automático a los 3 segundos
     setTimeout(() => {
       const x = (Math.random() - 0.5) * 40;
       const z = (Math.random() - 0.5) * 40;
