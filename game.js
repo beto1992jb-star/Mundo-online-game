@@ -1,5 +1,5 @@
 // ==========================================
-// MUNDO ONLINE - Motor 3D MMORPG Ultra-Realista
+// MUNDO ONLINE - Motor 3D MMORPG Estable y Optimizado
 // ==========================================
 
 let scene, camera, renderer, player, playerMeshGroup;
@@ -72,53 +72,13 @@ const DROP_TABLE = [
   { id: 'shield_dk', name: 'Escudo Escarlata', slot: 'shield', color: 0xaa0000 }
 ];
 
-// Generadores de Texturas Procedurales
-function generateNoiseTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#1c221a';
-  ctx.fillRect(0, 0, 512, 512);
-
-  for (let i = 0; i < 40000; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    const val = Math.floor(Math.random() * 60);
-    ctx.fillStyle = `rgb(${20 + val}, ${30 + val}, ${20 + val})`;
-    ctx.fillRect(x, y, 2, 2);
-  }
-  return new THREE.CanvasTexture(canvas);
-}
-
-function generateMetalBumpTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#808080';
-  ctx.fillRect(0, 0, 256, 256);
-
-  for (let i = 0; i < 15000; i++) {
-    const x = Math.random() * 256;
-    const y = Math.random() * 256;
-    const val = Math.floor(Math.random() * 255);
-    ctx.fillStyle = `rgb(${val}, ${val}, ${val})`;
-    ctx.fillRect(x, y, 1, 1);
-  }
-  return new THREE.CanvasTexture(canvas);
-}
-
-const bumpTexture = generateMetalBumpTexture();
-const terrainTexture = generateNoiseTexture();
-
 function init() {
   if (renderer) return;
 
-  // 1. Escena Realista
+  // 1. Escena 3D
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x020205);
-  scene.fog = new THREE.FogExp2(0x020205, 0.015);
+  scene.background = new THREE.Color(0x0c0d12);
+  scene.fog = new THREE.FogExp2(0x0c0d12, 0.015);
 
   // 2. Cámara Ortográfica Isométrica
   const aspect = window.innerWidth / window.innerHeight;
@@ -127,32 +87,23 @@ function init() {
   camera.position.set(22, 24, 22);
   camera.lookAt(0, 0, 0);
 
-  // 3. Renderizador con Sombras y Mapeo Tonal Avanzado
-  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  // 3. Renderizador WebGL
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
   document.body.appendChild(renderer.domElement);
 
-  // 4. Luces Ambientales y Sol
-  const ambientLight = new THREE.AmbientLight(0x334466, 0.7);
+  // 4. Luces de Ambientación
+  const ambientLight = new THREE.AmbientLight(0x445577, 0.9);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffeedd, 1.8);
+  const dirLight = new THREE.DirectionalLight(0xfff0dd, 1.5);
   dirLight.position.set(25, 40, 15);
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
-  dirLight.shadow.camera.near = 0.5;
-  dirLight.shadow.camera.far = 150;
-  const dArea = 40;
-  dirLight.shadow.camera.left = -dArea;
-  dirLight.shadow.camera.right = dArea;
-  dirLight.shadow.camera.top = dArea;
-  dirLight.shadow.camera.bottom = -dArea;
+  dirLight.shadow.mapSize.width = 1024;
+  dirLight.shadow.mapSize.height = 1024;
   scene.add(dirLight);
 
   // 5. Terreno
@@ -170,11 +121,11 @@ function init() {
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  // Equipar armas iniciales del inventario
+  // Equipar ítems iniciales
   equipItem(inventory[0]);
   equipItem(inventory[1]);
 
-  // 7. Generación de Monstruos
+  // 7. Generar Monstruos
   spawnEnemies(8);
 
   // Eventos
@@ -186,30 +137,22 @@ function init() {
   animate(performance.now());
 }
 
-// ----------------------------------------------------
-// MODELADO DE PERSONAJE BASE Y EQUIPAMIENTO DINÁMICO
-// ----------------------------------------------------
-
 function createBasePlayerMesh() {
   const group = new THREE.Group();
 
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.6 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.5 });
   const underClothesMat = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.8 });
 
-  // Torso desnudo/ropa base
   const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.35, 1.2, 12), underClothesMat);
   torso.position.y = 1.2;
   torso.castShadow = true;
-  torso.receiveShadow = true;
   group.add(torso);
 
-  // Cabeza Base
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), skinMat);
   head.position.y = 2.0;
   head.castShadow = true;
   group.add(head);
 
-  // Brazos y Piernas Base
   const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.75), skinMat);
   armL.position.set(-0.55, 1.1, 0);
   armL.castShadow = true;
@@ -231,9 +174,7 @@ function createBasePlayerMesh() {
   return group;
 }
 
-// Actualización visual en tiempo real de ítems en el modelo 3D
 function updatePlayerVisuals() {
-  // Limpiar partes actuales
   Object.keys(playerVisualParts).forEach(slot => {
     if (playerVisualParts[slot]) {
       playerMeshGroup.remove(playerVisualParts[slot]);
@@ -241,14 +182,9 @@ function updatePlayerVisuals() {
     }
   });
 
-  const armorMat = new THREE.MeshStandardMaterial({
-    color: 0x153866, metalness: 0.85, roughness: 0.25, bumpMap: bumpTexture, bumpScale: 0.02
-  });
-  const goldMat = new THREE.MeshStandardMaterial({
-    color: 0xffb700, metalness: 0.9, roughness: 0.2, bumpMap: bumpTexture, bumpScale: 0.03
-  });
+  const armorMat = new THREE.MeshStandardMaterial({ color: 0x153866, metalness: 0.85, roughness: 0.25 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xffb700, metalness: 0.9, roughness: 0.2 });
 
-  // CASCO
   if (equippedItems.helmet) {
     const helmetGroup = new THREE.Group();
     const helm = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.55, 10), armorMat);
@@ -259,7 +195,6 @@ function updatePlayerVisuals() {
     playerMeshGroup.add(helmetGroup);
   }
 
-  // PECHERA
   if (equippedItems.armor) {
     const armorGroup = new THREE.Group();
     const chest = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.65, 0.55), armorMat);
@@ -268,7 +203,6 @@ function updatePlayerVisuals() {
 
     const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), goldMat);
     shoulderL.position.set(-0.62, 1.6, 0);
-    shoulderL.castShadow = true;
     const shoulderR = shoulderL.clone();
     shoulderR.position.x = 0.62;
 
@@ -277,12 +211,10 @@ function updatePlayerVisuals() {
     playerMeshGroup.add(armorGroup);
   }
 
-  // BOTAS
   if (equippedItems.boots) {
     const bootsGroup = new THREE.Group();
     const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.35, 0.35), armorMat);
     bootL.position.set(-0.22, 0.18, 0.05);
-    bootL.castShadow = true;
     const bootR = bootL.clone();
     bootR.position.x = 0.22;
 
@@ -291,7 +223,6 @@ function updatePlayerVisuals() {
     playerMeshGroup.add(bootsGroup);
   }
 
-  // ARMA (Espada)
   if (equippedItems.weapon) {
     const weaponGroup = new THREE.Group();
     const bladeMat = new THREE.MeshStandardMaterial({
@@ -310,7 +241,6 @@ function updatePlayerVisuals() {
     playerMeshGroup.add(weaponGroup);
   }
 
-  // ESCUDO
   if (equippedItems.shield) {
     const shieldGroup = new THREE.Group();
     const shieldMat = new THREE.MeshStandardMaterial({
@@ -325,11 +255,10 @@ function updatePlayerVisuals() {
     playerMeshGroup.add(shieldGroup);
   }
 
-  // ALAS
   if (equippedItems.wings) {
     const wingsGroup = new THREE.Group();
     const wingMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, emissive: 0x666666, side: THREE.DoubleSide, roughness: 0.2
+      color: 0xffffff, emissive: 0x444444, side: THREE.DoubleSide, roughness: 0.2
     });
     const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.2), wingMat);
     wingL.position.set(-0.85, 1.6, -0.35);
@@ -344,14 +273,9 @@ function updatePlayerVisuals() {
   }
 }
 
-// ----------------------------------------------------
-// MONSTRUOS ULTRA-DETALLADOS
-// ----------------------------------------------------
-
 function createSpiderMesh() {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x220505, roughness: 0.4, bumpMap: bumpTexture, bumpScale: 0.05 });
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x330505, roughness: 0.4 });
 
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12), mat);
   body.position.y = 0.55;
@@ -377,7 +301,7 @@ function createSpiderMesh() {
 
 function createDragonMesh() {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x440055, roughness: 0.3, metalness: 0.2, bumpMap: bumpTexture, bumpScale: 0.08 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x550066, roughness: 0.3, metalness: 0.2 });
   const wingMat = new THREE.MeshStandardMaterial({ color: 0x220033, side: THREE.DoubleSide, roughness: 0.5 });
 
   const body = new THREE.Mesh(new THREE.ConeGeometry(0.75, 2.2, 10), mat);
@@ -394,7 +318,6 @@ function createDragonMesh() {
   const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.4), wingMat);
   wingL.position.set(-1.0, 1.5, -0.1);
   wingL.rotation.y = Math.PI / 3;
-  wingL.castShadow = true;
   const wingR = wingL.clone();
   wingR.position.x = 1.0;
   wingR.rotation.y = -Math.PI / 3;
@@ -416,7 +339,6 @@ function createLichMesh() {
 
   const skull = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 10), skullMat);
   skull.position.y = 2.25;
-  skull.castShadow = true;
   group.add(skull);
 
   const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.7), robeMat);
@@ -428,32 +350,27 @@ function createLichMesh() {
   return group;
 }
 
-// Terreno Realista
 function createTerrain() {
-  const floorGeo = new THREE.PlaneGeometry(120, 120, 64, 64);
-  terrainTexture.wrapS = THREE.RepeatWrapping;
-  terrainTexture.wrapT = THREE.RepeatWrapping;
-  terrainTexture.repeat.set(8, 8);
-
-  const floorMat = new THREE.MeshStandardMaterial({
-    map: terrainTexture, roughness: 0.85, metalness: 0.1, bumpMap: bumpTexture, bumpScale: 0.05
-  });
+  const floorGeo = new THREE.PlaneGeometry(120, 120);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a2218, roughness: 0.9, metalness: 0.1 });
 
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
+  const grid = new THREE.GridHelper(120, 60, 0x000000, 0x223322);
+  grid.position.y = 0.02;
+  scene.add(grid);
+
   const torchPositions = [[-20, -20], [20, -20], [-20, 20], [20, 20]];
   torchPositions.forEach(pos => {
     const torch = new THREE.Group();
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.5), new THREE.MeshStandardMaterial({ color: 0x221100 }));
     pole.position.y = 1.75;
-    pole.castShadow = true;
 
     const fireLight = new THREE.PointLight(0xffaa22, 2.0, 16);
     fireLight.position.y = 3.6;
-    fireLight.castShadow = true;
 
     torch.add(pole, fireLight);
     torch.position.set(pos[0], 0, pos[1]);
@@ -461,10 +378,6 @@ function createTerrain() {
     torches.push(fireLight);
   });
 }
-
-// ----------------------------------------------------
-// ENEMIGOS: COMPORTAMIENTO Y DROPS
-// ----------------------------------------------------
 
 function spawnEnemy(x, z) {
   const enemyData = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
@@ -502,7 +415,6 @@ function spawnEnemies(count) {
   }
 }
 
-// Drop de Ítems en 3D
 function dropItemAt(position) {
   const itemData = DROP_TABLE[Math.floor(Math.random() * DROP_TABLE.length)];
 
@@ -534,10 +446,6 @@ function checkItemPickup() {
     }
   });
 }
-
-// ----------------------------------------------------
-// SISTEMA DE INTERACCIÓN, INVENTARIO Y STATS
-// ----------------------------------------------------
 
 function addStat(type) {
   if (playerStats.points <= 0) return;
@@ -642,27 +550,20 @@ function onPointerDown(event) {
   }
 }
 
-// ----------------------------------------------------
-// BUCLE PRINCIPAL DE JUEGO Y ANIMACIÓN
-// ----------------------------------------------------
-
 function animate(time) {
   requestAnimationFrame(animate);
   time = time || performance.now();
 
-  // Torches titilantes
   torches.forEach(t => {
     t.intensity = 1.8 + Math.sin(time * 0.01 + Math.random() * 0.2) * 0.4;
   });
 
-  // Rotación de ítems dropeados
   droppedItems.forEach(d => {
     d.rotation.y += 0.02;
   });
 
   checkItemPickup();
 
-  // Movimiento Jugador
   if (targetPosition) {
     const distance = player.position.distanceTo(targetPosition);
     if (distance > 0.2) {
@@ -679,7 +580,6 @@ function animate(time) {
     }
   }
 
-  // Combate Jugador -> Enemigo
   if (targetEnemy) {
     const distanceToEnemy = player.position.distanceTo(targetEnemy.position);
     const dirToEnemy = new THREE.Vector3().subVectors(targetEnemy.position, player.position).normalize();
@@ -696,11 +596,9 @@ function animate(time) {
     }
   }
 
-  // COMPORTAMIENTO ENEMIGO (Persecución y Ataque)
   enemies.forEach((enemy) => {
     const distToPlayer = enemy.position.distanceTo(player.position);
 
-    // Detección de Agro (Rango 14)
     if (distToPlayer < 14) {
       const dir = new THREE.Vector3().subVectors(player.position, enemy.position).normalize();
       enemy.rotation.y = Math.atan2(dir.x, dir.z);
@@ -708,7 +606,6 @@ function animate(time) {
       if (distToPlayer > enemy.userData.range) {
         enemy.position.addScaledVector(dir, 0.07);
       } else {
-        // En rango -> Atacar al Jugador
         if (time - enemy.userData.lastAttack > enemy.userData.attackSpeed) {
           enemy.userData.lastAttack = time;
           monsterAttackPlayer(enemy);
@@ -719,7 +616,6 @@ function animate(time) {
     }
   });
 
-  // Animación Ataque Jugador
   if (isAttacking && playerVisualParts.weapon) {
     playerVisualParts.weapon.rotation.x += 0.3;
     if (playerVisualParts.weapon.rotation.x > Math.PI) {
