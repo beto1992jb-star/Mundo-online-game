@@ -391,4 +391,485 @@ function createDragonMesh() {
   head.castShadow = true;
   group.add(head);
 
-  const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1
+  const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.4), wingMat);
+  wingL.position.set(-1.0, 1.5, -0.1);
+  wingL.rotation.y = Math.PI / 3;
+  wingL.castShadow = true;
+  const wingR = wingL.clone();
+  wingR.position.x = 1.0;
+  wingR.rotation.y = -Math.PI / 3;
+  group.add(wingL, wingR);
+
+  return group;
+}
+
+function createLichMesh() {
+  const group = new THREE.Group();
+  const robeMat = new THREE.MeshStandardMaterial({ color: 0x052b15, roughness: 0.8 });
+  const skullMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.2 });
+  const orbMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+
+  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.85, 2.2, 12), robeMat);
+  robe.position.y = 1.1;
+  robe.castShadow = true;
+  group.add(robe);
+
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 10), skullMat);
+  skull.position.y = 2.25;
+  skull.castShadow = true;
+  group.add(skull);
+
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.7), robeMat);
+  staff.position.set(-0.65, 1.35, 0.2);
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), orbMat);
+  orb.position.set(-0.65, 2.7, 0.2);
+  group.add(staff, orb);
+
+  return group;
+}
+
+// Terreno Realista
+function createTerrain() {
+  const floorGeo = new THREE.PlaneGeometry(120, 120, 64, 64);
+  terrainTexture.wrapS = THREE.RepeatWrapping;
+  terrainTexture.wrapT = THREE.RepeatWrapping;
+  terrainTexture.repeat.set(8, 8);
+
+  const floorMat = new THREE.MeshStandardMaterial({
+    map: terrainTexture, roughness: 0.85, metalness: 0.1, bumpMap: bumpTexture, bumpScale: 0.05
+  });
+
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const torchPositions = [[-20, -20], [20, -20], [-20, 20], [20, 20]];
+  torchPositions.forEach(pos => {
+    const torch = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.5), new THREE.MeshStandardMaterial({ color: 0x221100 }));
+    pole.position.y = 1.75;
+    pole.castShadow = true;
+
+    const fireLight = new THREE.PointLight(0xffaa22, 2.0, 16);
+    fireLight.position.y = 3.6;
+    fireLight.castShadow = true;
+
+    torch.add(pole, fireLight);
+    torch.position.set(pos[0], 0, pos[1]);
+    scene.add(torch);
+    torches.push(fireLight);
+  });
+}
+
+// ----------------------------------------------------
+// ENEMIGOS: COMPORTAMIENTO Y DROPS
+// ----------------------------------------------------
+
+function spawnEnemy(x, z) {
+  const enemyData = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
+  let mesh;
+
+  if (enemyData.type === 'spider') mesh = createSpiderMesh();
+  else if (enemyData.type === 'dragon') mesh = createDragonMesh();
+  else mesh = createLichMesh();
+
+  mesh.position.set(x, 0, z);
+  mesh.userData = {
+    id: Math.random(),
+    name: enemyData.name,
+    hp: enemyData.hp,
+    maxHp: enemyData.hp,
+    expReward: enemyData.exp,
+    zenReward: enemyData.zen,
+    atk: enemyData.atk,
+    range: enemyData.range,
+    attackSpeed: enemyData.speed,
+    lastAttack: 0
+  };
+
+  scene.add(mesh);
+  enemies.push(mesh);
+}
+
+function spawnEnemies(count) {
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random() - 0.5) * 75;
+    const z = (Math.random() - 0.5) * 75;
+    if (Math.abs(x) > 10 || Math.abs(z) > 10) {
+      spawnEnemy(x, z);
+    }
+  }
+}
+
+// Drop de Ítems en 3D
+function dropItemAt(position) {
+  const itemData = DROP_TABLE[Math.floor(Math.random() * DROP_TABLE.length)];
+
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: itemData.color, emissive: 0x333333, metalness: 0.8 });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat);
+  mesh.position.y = 0.5;
+
+  const light = new THREE.PointLight(0xffff00, 1.5, 4);
+  light.position.y = 0.8;
+
+  group.add(mesh, light);
+  group.position.copy(position);
+  group.userData = { item: itemData };
+
+  scene.add(group);
+  droppedItems.push(group);
+}
+
+function checkItemPickup() {
+  droppedItems.forEach((dropGroup, idx) => {
+    if (player.position.distanceTo(dropGroup.position) < 1.8) {
+      inventory.push(dropGroup.userData.item);
+      showDamageText(`+ ${dropGroup.userData.item.name}`, player.position, "#00ffcc");
+
+      scene.remove(dropGroup);
+      droppedItems.splice(idx, 1);
+      updateInventoryUI();
+    }
+  });
+}
+
+// ----------------------------------------------------
+// SISTEMA DE INTERACCIÓN, INVENTARIO Y STATS
+// ----------------------------------------------------
+
+function addStat(type) {
+  if (playerStats.points <= 0) return;
+
+  if (type === 'str') playerStats.str += 1;
+  if (type === 'agi') playerStats.agi += 1;
+  if (type === 'vit') playerStats.vit += 1;
+  if (type === 'ene') playerStats.ene += 1;
+
+  playerStats.points -= 1;
+  recalculateStats();
+  updateHUD();
+}
+
+function recalculateStats() {
+  playerStats.maxHp = 100 + (playerStats.vit * 3);
+  playerStats.maxMp = 40 + (playerStats.ene * 2);
+  playerStats.hp = Math.min(playerStats.hp, playerStats.maxHp);
+  playerStats.mp = Math.min(playerStats.mp, playerStats.maxMp);
+}
+
+function equipItem(item) {
+  if (!item || !item.slot) return;
+  
+  if (equippedItems[item.slot]) {
+    inventory.push(equippedItems[item.slot]);
+  }
+  
+  equippedItems[item.slot] = item;
+  inventory = inventory.filter(i => i !== item);
+
+  updatePlayerVisuals();
+  updateInventoryUI();
+}
+
+function unequipSlot(slot) {
+  if (equippedItems[slot]) {
+    inventory.push(equippedItems[slot]);
+    equippedItems[slot] = null;
+    updatePlayerVisuals();
+    updateInventoryUI();
+  }
+}
+
+function updateInventoryUI() {
+  const grid = document.getElementById('inventory-grid');
+  grid.innerHTML = '';
+
+  inventory.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'inv-item';
+    el.innerText = item.name;
+    el.onclick = () => equipItem(item);
+    grid.appendChild(el);
+  });
+
+  Object.keys(equippedItems).forEach(slot => {
+    const slotEl = document.getElementById(`slot-${slot}`);
+    if (slotEl) {
+      if (equippedItems[slot]) {
+        slotEl.innerText = equippedItems[slot].name;
+        slotEl.classList.add('equipped');
+      } else {
+        slotEl.innerText = `Sin ${slot.toUpperCase()}`;
+        slotEl.classList.remove('equipped');
+      }
+    }
+  });
+}
+
+function onPointerDown(event) {
+  if (event.target !== renderer.domElement) return;
+
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  for (let i = 0; i < intersects.length; i++) {
+    let clickedObj = intersects[i].object;
+
+    while (clickedObj.parent && clickedObj.parent !== scene) {
+      clickedObj = clickedObj.parent;
+    }
+
+    if (enemies.includes(clickedObj)) {
+      targetEnemy = clickedObj;
+      targetPosition = null;
+      return;
+    }
+
+    if (clickedObj !== player && !enemies.includes(clickedObj)) {
+      targetPosition = intersects[i].point;
+      targetPosition.y = 0;
+      targetEnemy = null;
+      break;
+    }
+  }
+}
+
+// ----------------------------------------------------
+// BUCLE PRINCIPAL DE JUEGO Y ANIMACIÓN
+// ----------------------------------------------------
+
+function animate(time) {
+  requestAnimationFrame(animate);
+  time = time || performance.now();
+
+  // Torches titilantes
+  torches.forEach(t => {
+    t.intensity = 1.8 + Math.sin(time * 0.01 + Math.random() * 0.2) * 0.4;
+  });
+
+  // Rotación de ítems dropeados
+  droppedItems.forEach(d => {
+    d.rotation.y += 0.02;
+  });
+
+  checkItemPickup();
+
+  // Movimiento Jugador
+  if (targetPosition) {
+    const distance = player.position.distanceTo(targetPosition);
+    if (distance > 0.2) {
+      const direction = new THREE.Vector3().subVectors(targetPosition, player.position).normalize();
+      const moveSpeed = 0.18 + (playerStats.agi * 0.001);
+      player.position.addScaledVector(direction, moveSpeed);
+
+      const angle = Math.atan2(direction.x, direction.z);
+      playerMeshGroup.rotation.y = angle;
+
+      updateCamera();
+    } else {
+      targetPosition = null;
+    }
+  }
+
+  // Combate Jugador -> Enemigo
+  if (targetEnemy) {
+    const distanceToEnemy = player.position.distanceTo(targetEnemy.position);
+    const dirToEnemy = new THREE.Vector3().subVectors(targetEnemy.position, player.position).normalize();
+    playerMeshGroup.rotation.y = Math.atan2(dirToEnemy.x, dirToEnemy.z);
+
+    if (distanceToEnemy > playerStats.attackRange) {
+      player.position.addScaledVector(dirToEnemy, 0.18);
+      updateCamera();
+    } else {
+      if (time - lastAttackTime > Math.max(250, playerStats.attackSpeed - playerStats.agi * 3)) {
+        attackEnemy(targetEnemy);
+        lastAttackTime = time;
+      }
+    }
+  }
+
+  // COMPORTAMIENTO ENEMIGO (Persecución y Ataque)
+  enemies.forEach((enemy) => {
+    const distToPlayer = enemy.position.distanceTo(player.position);
+
+    // Detección de Agro (Rango 14)
+    if (distToPlayer < 14) {
+      const dir = new THREE.Vector3().subVectors(player.position, enemy.position).normalize();
+      enemy.rotation.y = Math.atan2(dir.x, dir.z);
+
+      if (distToPlayer > enemy.userData.range) {
+        enemy.position.addScaledVector(dir, 0.07);
+      } else {
+        // En rango -> Atacar al Jugador
+        if (time - enemy.userData.lastAttack > enemy.userData.attackSpeed) {
+          enemy.userData.lastAttack = time;
+          monsterAttackPlayer(enemy);
+        }
+      }
+    } else {
+      enemy.rotation.y += 0.005;
+    }
+  });
+
+  // Animación Ataque Jugador
+  if (isAttacking && playerVisualParts.weapon) {
+    playerVisualParts.weapon.rotation.x += 0.3;
+    if (playerVisualParts.weapon.rotation.x > Math.PI) {
+      playerVisualParts.weapon.rotation.x = Math.PI / 3;
+      isAttacking = false;
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+
+function monsterAttackPlayer(enemy) {
+  const dmg = Math.max(1, enemy.userData.atk - Math.floor(playerStats.vit * 0.4));
+  playerStats.hp = Math.max(0, playerStats.hp - dmg);
+
+  showDamageText(`-${dmg}`, player.position, "#ff0000");
+  updateHUD();
+
+  if (playerStats.hp <= 0) {
+    alert("¡Has sido derrotado! Reapareciendo...");
+    playerStats.hp = playerStats.maxHp;
+    player.position.set(0, 0, 0);
+    targetEnemy = null;
+    targetPosition = null;
+    updateHUD();
+  }
+}
+
+function attackEnemy(enemy) {
+  isAttacking = true;
+  const baseDamage = 18 + Math.floor(playerStats.str * 1.3);
+  const actualDamage = baseDamage + Math.floor(Math.random() * 12) - 4;
+  enemy.userData.hp -= actualDamage;
+
+  showDamageText(`-${actualDamage}`, enemy.position, "#ffee00");
+
+  enemy.traverse((child) => {
+    if (child.isMesh && child.material) {
+      const origColor = child.material.color.getHex();
+      child.material.color.setHex(0xff0000);
+      setTimeout(() => child.material.color.setHex(origColor), 100);
+    }
+  });
+
+  if (enemy.userData.hp <= 0) {
+    gainExperience(enemy.userData.expReward);
+    playerStats.zen += enemy.userData.zenReward;
+
+    if (Math.random() < 0.6) {
+      dropItemAt(enemy.position);
+    }
+
+    scene.remove(enemy);
+    enemies = enemies.filter(e => e !== enemy);
+    targetEnemy = null;
+
+    updateHUD();
+
+    setTimeout(() => {
+      const x = (Math.random() - 0.5) * 75;
+      const z = (Math.random() - 0.5) * 75;
+      spawnEnemy(x, z);
+    }, 3000);
+  }
+}
+
+function showDamageText(text, position, color = "#ff3333") {
+  const div = document.createElement('div');
+  div.className = 'damage-text';
+  div.innerText = text;
+  div.style.color = color;
+
+  const vector = position.clone();
+  vector.y += 2.2;
+  vector.project(camera);
+
+  const x = (vector.x * .5 + .5) * window.innerWidth;
+  const y = (-(vector.y * .5) + .5) * window.innerHeight;
+
+  div.style.left = `${x}px`;
+  div.style.top = `${y}px`;
+
+  document.body.appendChild(div);
+
+  setTimeout(() => {
+    if (div.parentNode) div.parentNode.removeChild(div);
+  }, 800);
+}
+
+function gainExperience(amount) {
+  playerStats.exp += amount;
+
+  if (playerStats.exp >= playerStats.maxExp) {
+    playerStats.level++;
+    playerStats.points += 5;
+    playerStats.exp -= playerStats.maxExp;
+    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.5);
+
+    recalculateStats();
+    playerStats.hp = playerStats.maxHp;
+    playerStats.mp = playerStats.maxMp;
+
+    alert(`¡LEVEL UP! Nivel ${playerStats.level}. Tienes 5 puntos de atributos (Presiona C).`);
+  }
+
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('player-level').innerText = playerStats.level;
+  document.getElementById('player-zen').innerText = playerStats.zen;
+  document.getElementById('player-gems').innerText = playerStats.gems;
+
+  const hpPercent = Math.max(0, (playerStats.hp / playerStats.maxHp) * 100);
+  document.getElementById('hp-bar').style.width = `${hpPercent}%`;
+  document.getElementById('hp-text').innerText = `${playerStats.hp} / ${playerStats.maxHp}`;
+
+  const mpPercent = Math.max(0, (playerStats.mp / playerStats.maxMp) * 100);
+  document.getElementById('mp-bar').style.width = `${mpPercent}%`;
+  document.getElementById('mp-text').innerText = `${playerStats.mp} / ${playerStats.maxMp}`;
+
+  const expPercent = Math.min(100, (playerStats.exp / playerStats.maxExp) * 100);
+  document.getElementById('exp-bar').style.width = `${expPercent}%`;
+  document.getElementById('exp-text').innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
+
+  document.getElementById('stat-points').innerText = playerStats.points;
+  document.getElementById('stat-str').innerText = playerStats.str;
+  document.getElementById('stat-agi').innerText = playerStats.agi;
+  document.getElementById('stat-vit').innerText = playerStats.vit;
+  document.getElementById('stat-ene').innerText = playerStats.ene;
+}
+
+function updateCamera() {
+  camera.position.x = player.position.x + 22;
+  camera.position.z = player.position.z + 22;
+}
+
+function onWindowResize() {
+  const aspect = window.innerWidth / window.innerHeight;
+  const d = 20;
+  camera.left = -d * aspect;
+  camera.right = d * aspect;
+  camera.top = d;
+  camera.bottom = -d;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
