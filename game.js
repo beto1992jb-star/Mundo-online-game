@@ -3,6 +3,8 @@ let targetPosition = null;
 let targetEnemy = null;
 let torches = [];
 let particles = [];
+let droppedItems = [];
+let npcs = [];
 
 let playerStats = {
   name: "DarkKnight",
@@ -18,7 +20,7 @@ let playerStats = {
   maxMp: 50,
   exp: 0,
   maxExp: 100,
-  zen: 0,
+  zen: 500,
   gems: 0,
   attackRange: 3.0,
   attackSpeed: 400
@@ -29,16 +31,16 @@ let isAttacking = false;
 let enemies = [];
 
 const ENEMY_TYPES = [
-  { type: 'spider', name: "Giant Spider", hp: 70, exp: 45, zen: 35, model: 'models/spider.gltf' },
-  { type: 'dragon', name: "Budge Dragon", hp: 130, exp: 90, zen: 70, model: 'models/dragon.gltf' },
-  { type: 'lich', name: "Lich", hp: 200, exp: 160, zen: 120, model: 'models/lich.gltf' }
+  { type: 'spider', name: "Giant Spider", hp: 70, exp: 45, zen: 50, model: 'models/spider.gltf' },
+  { type: 'dragon', name: "Budge Dragon", hp: 130, exp: 90, zen: 120, model: 'models/dragon.gltf' },
+  { type: 'lich', name: "Lich", hp: 200, exp: 160, zen: 250, model: 'models/lich.gltf' }
 ];
 
 function init() {
   if (renderer) return;
 
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
+    renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -50,8 +52,8 @@ function init() {
   }
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x010103);
-  scene.fog = new THREE.FogExp2(0x010103, 0.022);
+  scene.background = new THREE.Color(0x050403);
+  scene.fog = new THREE.FogExp2(0x0a0806, 0.03);
 
   const aspect = window.innerWidth / window.innerHeight;
   const d = 15;
@@ -59,50 +61,47 @@ function init() {
   camera.position.set(20, 22, 20);
   camera.lookAt(0, 0, 0);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+  // Iluminación isométrica de MU
+  const ambientLight = new THREE.AmbientLight(0x4a3b2c, 0.9);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffddaa, 1.5);
-  dirLight.position.set(15, 25, 10);
+  const dirLight = new THREE.DirectionalLight(0xffcc88, 1.8);
+  dirLight.position.set(20, 30, 15);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
   gltfLoader = new THREE.GLTFLoader();
 
   createLorenciaMap();
+  spawnNPCs();
 
   player = new THREE.Group();
   playerMeshGroup = new THREE.Group();
   player.add(playerMeshGroup);
 
-  // Cargar modelo 3D del Jugador (.gltf)
+  // Cargar Modelo del Personaje
   gltfLoader.load(
     'models/player.gltf',
     (gltf) => {
       const model = gltf.scene;
-      model.scale.set(1, 1, 1); // Ajusta la escala según tu archivo exportado
+      applyMuGlowStyle(model, 0x0022ff);
       playerMeshGroup.add(model);
     },
     undefined,
-    (error) => {
-      console.warn("No se encontró 'models/player.gltf'. Cargando modelo temporal.");
+    () => {
       const fallback = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 2, 1),
-        new THREE.MeshStandardMaterial({ color: 0x00aaff })
+        new THREE.BoxGeometry(0.9, 2, 0.9),
+        new THREE.MeshStandardMaterial({ color: 0x0055ff, metalness: 0.8, roughness: 0.2, emissive: 0x001144 })
       );
       fallback.position.y = 1;
       playerMeshGroup.add(fallback);
     }
   );
 
-  const auraLight = new THREE.PointLight(0x00aaff, 2.5, 10);
-  auraLight.position.set(0, 1.5, 0);
-  player.add(auraLight);
-
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  spawnEnemies(10);
+  spawnEnemies(8);
 
   window.addEventListener('resize', onWindowResize, false);
   window.addEventListener('pointerdown', onPointerDown, false);
@@ -112,54 +111,59 @@ function init() {
   animate(performance.now());
 }
 
-function createLorenciaMap() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#0f0d0a';
-  ctx.fillRect(0, 0, 512, 512);
-  ctx.strokeStyle = '#050403';
-  ctx.lineWidth = 8;
-
-  for (let i = 0; i < 512; i += 64) {
-    for (let j = 0; j < 512; j += 64) {
-      ctx.strokeRect(i, j, 64, 64);
-      ctx.fillStyle = (i + j) % 128 === 0 ? '#181410' : '#120f0c';
-      ctx.fillRect(i + 4, j + 4, 56, 56);
+// Aplica el destello de armadura +11 / Item Excelente de MU
+function applyMuGlowStyle(model, emissiveHex = 0x001133) {
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+      if (child.material) {
+        child.material.roughness = 0.2;
+        child.material.metalness = 0.8;
+        child.material.emissive = new THREE.Color(emissiveHex);
+        child.material.emissiveIntensity = 0.5;
+      }
     }
-  }
+  });
+}
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(16, 16);
-
-  const floorGeo = new THREE.PlaneGeometry(100, 100);
-  const floorMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.85 });
+function createLorenciaMap() {
+  const floorGeo = new THREE.PlaneGeometry(120, 120);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x110d08, roughness: 0.9 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const torchPositions = [[-12, -12], [12, -12], [-12, 12], [12, 12]];
+  // Antorchas de la ciudad
+  const torchPositions = [[-10, -10], [10, -10], [-10, 10], [10, 10]];
   torchPositions.forEach(pos => {
     const torch = new THREE.Group();
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.18, 3, 6),
-      new THREE.MeshStandardMaterial({ color: 0x0a0502 })
+      new THREE.CylinderGeometry(0.1, 0.2, 3),
+      new THREE.MeshStandardMaterial({ color: 0x221100 })
     );
     pole.position.y = 1.5;
 
-    const fireLight = new THREE.PointLight(0xff5500, 3.0, 15);
-    fireLight.position.y = 3.2;
+    const fireLight = new THREE.PointLight(0xff6600, 3.0, 12);
+    fireLight.position.y = 3.0;
 
     torch.add(pole, fireLight);
     torch.position.set(pos[0], 0, pos[1]);
     scene.add(torch);
     torches.push(fireLight);
   });
+}
+
+function spawnNPCs() {
+  const barmaid = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 1.8),
+    new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x004433 })
+  );
+  barmaid.position.set(4, 0.9, -4);
+  barmaid.userData = { isNPC: true, name: "Lumen the Barmaid" };
+  scene.add(barmaid);
+  npcs.push(barmaid);
 }
 
 function spawnEnemy(x, z) {
@@ -170,14 +174,14 @@ function spawnEnemy(x, z) {
     enemyData.model,
     (gltf) => {
       const model = gltf.scene;
-      model.scale.set(1, 1, 1);
+      applyMuGlowStyle(model, 0x330000);
       enemyGroup.add(model);
     },
     undefined,
     () => {
       const fallback = new THREE.Mesh(
         new THREE.SphereGeometry(0.8),
-        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+        new THREE.MeshStandardMaterial({ color: 0xaa0000, metalness: 0.5 })
       );
       fallback.position.y = 0.8;
       enemyGroup.add(fallback);
@@ -200,31 +204,28 @@ function spawnEnemy(x, z) {
 
 function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
-    const x = (Math.random() - 0.5) * 55;
-    const z = (Math.random() - 0.5) * 55;
-    if (Math.abs(x) > 5 || Math.abs(z) > 5) {
+    const x = (Math.random() - 0.5) * 60;
+    const z = (Math.random() - 0.5) * 60;
+    if (Math.abs(x) > 8 || Math.abs(z) > 8) {
       spawnEnemy(x, z);
     }
   }
 }
 
-function addStat(type) {
-  if (playerStats.points <= 0) return;
-  if (type === 'str') playerStats.str += 5;
-  if (type === 'agi') playerStats.agi += 5;
-  if (type === 'vit') playerStats.vit += 5;
-  if (type === 'ene') playerStats.ene += 5;
+// Dropear items/Zen al suelo con efecto resplandeciente
+function dropItem(position, zenAmount) {
+  const itemGeo = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+  const itemMat = new THREE.MeshStandardMaterial({ 
+    color: 0xffd700, 
+    emissive: 0xffaa00, 
+    emissiveIntensity: 0.8 
+  });
+  const itemMesh = new THREE.Mesh(itemGeo, itemMat);
+  itemMesh.position.set(position.x, 0.2, position.z);
+  itemMesh.userData = { isDrop: true, zen: zenAmount };
 
-  playerStats.points -= 5;
-  recalculateStats();
-  updateHUD();
-}
-
-function recalculateStats() {
-  playerStats.maxHp = 100 + (playerStats.vit * 3);
-  playerStats.maxMp = 40 + (playerStats.ene * 2);
-  playerStats.hp = Math.min(playerStats.hp, playerStats.maxHp);
-  playerStats.mp = Math.min(playerStats.mp, playerStats.maxMp);
+  scene.add(itemMesh);
+  droppedItems.push(itemMesh);
 }
 
 function onPointerDown(event) {
@@ -246,12 +247,30 @@ function onPointerDown(event) {
       clickedObj = clickedObj.parent;
     }
 
+    // Interacción con Monstruo
     if (enemies.includes(clickedObj)) {
       targetEnemy = clickedObj;
       targetPosition = null;
       return;
     }
 
+    // Interacción con NPC (Tienda)
+    if (npcs.includes(clickedObj)) {
+      toggleWindow('shop-window');
+      return;
+    }
+
+    // Recoger Drop del suelo
+    if (droppedItems.includes(clickedObj)) {
+      playerStats.zen += clickedObj.userData.zen;
+      scene.remove(clickedObj);
+      droppedItems = droppedItems.filter(item => item !== clickedObj);
+      updateHUD();
+      showDamageText(`+${clickedObj.userData.zen} Zen`, player.position, "#ffee55");
+      return;
+    }
+
+    // Mover Personaje
     if (clickedObj !== player && !enemies.includes(clickedObj)) {
       targetPosition = intersects[i].point;
       targetPosition.y = 0;
@@ -261,41 +280,115 @@ function onPointerDown(event) {
   }
 }
 
-function createSlashEffect(position) {
-  const pGeo = new THREE.BufferGeometry();
-  const count = 20;
-  const posArray = new Float32Array(count * 3);
+function attackEnemy(enemy) {
+  isAttacking = true;
+  const baseDamage = 25 + Math.floor(playerStats.str * 1.4);
+  const actualDamage = baseDamage + Math.floor(Math.random() * 15);
+  enemy.userData.hp -= actualDamage;
 
-  for (let i = 0; i < count * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 2.5;
+  showDamageText(`-${actualDamage}`, enemy.position, "#ff2222");
+
+  if (enemy.userData.hp <= 0) {
+    gainExperience(enemy.userData.expReward);
+    dropItem(enemy.position, enemy.userData.zenReward);
+
+    scene.remove(enemy);
+    enemies = enemies.filter(e => e !== enemy);
+    targetEnemy = null;
+
+    updateHUD();
+
+    setTimeout(() => {
+      const x = (Math.random() - 0.5) * 60;
+      const z = (Math.random() - 0.5) * 60;
+      spawnEnemy(x, z);
+    }, 2000);
   }
+}
 
-  pGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-  const pMat = new THREE.PointsMaterial({ size: 0.25, color: 0x00ffff, blending: THREE.AdditiveBlending, transparent: true });
-  const pSystem = new THREE.Points(pGeo, pMat);
-  pSystem.position.copy(position);
-  pSystem.position.y += 1.0;
+function showDamageText(text, position, color = "#ff2222") {
+  const div = document.createElement('div');
+  div.className = 'damage-text';
+  div.style.color = color;
+  div.innerText = text;
 
-  scene.add(pSystem);
-  particles.push({ mesh: pSystem, life: 1.0 });
+  const vector = position.clone();
+  vector.y += 1.8;
+  vector.project(camera);
+
+  const x = (vector.x * .5 + .5) * window.innerWidth;
+  const y = (-(vector.y * .5) + .5) * window.innerHeight;
+
+  div.style.left = `${x}px`;
+  div.style.top = `${y}px`;
+
+  document.body.appendChild(div);
+
+  setTimeout(() => {
+    if (div.parentNode) div.parentNode.removeChild(div);
+  }, 600);
+}
+
+function buyItem(item, price) {
+  if (playerStats.zen >= price) {
+    playerStats.zen -= price;
+    if (item === 'apple') playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + 50);
+    if (item === 'mana') playerStats.mp = Math.min(playerStats.maxMp, playerStats.mp + 50);
+    updateHUD();
+    showDamageText("Comprado", player.position, "#00ffcc");
+  } else {
+    showDamageText("Zen insuficiente", player.position, "#ff0000");
+  }
+}
+
+function gainExperience(amount) {
+  playerStats.exp += amount;
+  if (playerStats.exp >= playerStats.maxExp) {
+    playerStats.level++;
+    playerStats.points += 5;
+    playerStats.exp -= playerStats.maxExp;
+    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.4);
+
+    recalculateStats();
+    playerStats.hp = playerStats.maxHp;
+    playerStats.mp = playerStats.maxMp;
+
+    showDamageText("LEVEL UP!", player.position, "#ffd700");
+  }
+  updateHUD();
+}
+
+function addStat(type) {
+  if (playerStats.points <= 0) return;
+  if (type === 'str') playerStats.str += 5;
+  if (type === 'agi') playerStats.agi += 5;
+  if (type === 'vit') playerStats.vit += 5;
+  if (type === 'ene') playerStats.ene += 5;
+
+  playerStats.points -= 5;
+  recalculateStats();
+  updateHUD();
+}
+
+function recalculateStats() {
+  playerStats.maxHp = 100 + (playerStats.vit * 3);
+  playerStats.maxMp = 40 + (playerStats.ene * 2);
+  playerStats.hp = Math.min(playerStats.hp, playerStats.maxHp);
+  playerStats.mp = Math.min(playerStats.mp, playerStats.maxMp);
 }
 
 function animate(time) {
   requestAnimationFrame(animate);
   time = time || performance.now();
 
-  torches.forEach(t => {
-    t.intensity = 2.5 + Math.sin(time * 0.015 + Math.random() * 0.2) * 0.6;
+  // Rotación suave del drop de Zen/Items
+  droppedItems.forEach(item => {
+    item.rotation.y += 0.03;
   });
 
-  for (let i = particles.length - 1; i >= 0; i--) {
-    particles[i].life -= 0.07;
-    particles[i].mesh.scale.multiplyScalar(1.05);
-    if (particles[i].life <= 0) {
-      scene.remove(particles[i].mesh);
-      particles.splice(i, 1);
-    }
-  }
+  torches.forEach(t => {
+    t.intensity = 2.5 + Math.sin(time * 0.015) * 0.5;
+  });
 
   if (targetPosition) {
     const distance = player.position.distanceTo(targetPosition);
@@ -303,10 +396,7 @@ function animate(time) {
       const direction = new THREE.Vector3().subVectors(targetPosition, player.position).normalize();
       const moveSpeed = 0.18 + (playerStats.agi * 0.001);
       player.position.addScaledVector(direction, moveSpeed);
-      
-      const angle = Math.atan2(direction.x, direction.z);
-      playerMeshGroup.rotation.y = angle;
-
+      playerMeshGroup.rotation.y = Math.atan2(direction.x, direction.z);
       updateCamera();
     } else {
       targetPosition = null;
@@ -329,84 +419,9 @@ function animate(time) {
     }
   }
 
-  if (isAttacking) {
-    playerMeshGroup.rotation.y += 0.45;
-    if (playerMeshGroup.rotation.y > Math.PI * 2) {
-      isAttacking = false;
-    }
-  }
-
   if (renderer && scene && camera) {
     renderer.render(scene, camera);
   }
-}
-
-function attackEnemy(enemy) {
-  isAttacking = true;
-  const baseDamage = 22 + Math.floor(playerStats.str * 1.3);
-  const actualDamage = baseDamage + Math.floor(Math.random() * 18);
-  enemy.userData.hp -= actualDamage;
-
-  showDamageText(actualDamage, enemy.position);
-  createSlashEffect(enemy.position);
-
-  if (enemy.userData.hp <= 0) {
-    gainExperience(enemy.userData.expReward);
-    playerStats.zen += enemy.userData.zenReward;
-
-    scene.remove(enemy);
-    enemies = enemies.filter(e => e !== enemy);
-    targetEnemy = null;
-
-    updateHUD();
-
-    setTimeout(() => {
-      const x = (Math.random() - 0.5) * 55;
-      const z = (Math.random() - 0.5) * 55;
-      spawnEnemy(x, z);
-    }, 1800);
-  }
-}
-
-function showDamageText(damage, position) {
-  const div = document.createElement('div');
-  div.className = 'damage-text';
-  div.innerText = `-${damage}`;
-
-  const vector = position.clone();
-  vector.y += 1.8;
-  vector.project(camera);
-
-  const x = (vector.x * .5 + .5) * window.innerWidth;
-  const y = (-(vector.y * .5) + .5) * window.innerHeight;
-
-  div.style.left = `${x}px`;
-  div.style.top = `${y}px`;
-
-  document.body.appendChild(div);
-
-  setTimeout(() => {
-    if (div.parentNode) div.parentNode.removeChild(div);
-  }, 600);
-}
-
-function gainExperience(amount) {
-  playerStats.exp += amount;
-
-  if (playerStats.exp >= playerStats.maxExp) {
-    playerStats.level++;
-    playerStats.points += 5;
-    playerStats.exp -= playerStats.maxExp;
-    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.4);
-
-    recalculateStats();
-    playerStats.hp = playerStats.maxHp;
-    playerStats.mp = playerStats.maxMp;
-
-    showDamageText("LEVEL UP!", player.position);
-  }
-
-  updateHUD();
 }
 
 function updateHUD() {
