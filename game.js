@@ -2,6 +2,7 @@ let scene, camera, renderer, player, playerMeshGroup, playerSword, playerWings;
 let targetPosition = null;
 let targetEnemy = null;
 let torches = [];
+let particles = [];
 
 let playerStats = {
   name: "DarkKnight",
@@ -19,8 +20,8 @@ let playerStats = {
   maxExp: 100,
   zen: 0,
   gems: 0,
-  attackRange: 3.2,
-  attackSpeed: 550
+  attackRange: 3.5,
+  attackSpeed: 500
 };
 
 let lastAttackTime = 0;
@@ -28,7 +29,7 @@ let isAttacking = false;
 let enemies = [];
 
 const ENEMY_TYPES = [
-  { type: 'spider', name: "Spider", hp: 60, exp: 40, zen: 25 },
+  { type: 'spider', name: "Giant Spider", hp: 60, exp: 40, zen: 25 },
   { type: 'dragon', name: "Budge Dragon", hp: 110, exp: 75, zen: 55 },
   { type: 'lich', name: "Lich", hp: 170, exp: 130, zen: 95 }
 ];
@@ -41,6 +42,7 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
   } catch (e) {
     console.error("Error al inicializar WebGL:", e);
@@ -49,36 +51,37 @@ function init() {
   }
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x040308);
-  scene.fog = new THREE.FogExp2(0x040308, 0.018);
+  scene.background = new THREE.Color(0x05040a);
+  scene.fog = new THREE.FogExp2(0x05040a, 0.015);
 
   const aspect = window.innerWidth / window.innerHeight;
-  const d = 20;
+  const d = 18;
   camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-  camera.position.set(22, 24, 22);
+  camera.position.set(20, 22, 20);
   camera.lookAt(0, 0, 0);
 
-  const ambientLight = new THREE.AmbientLight(0x403550, 0.9);
+  const ambientLight = new THREE.AmbientLight(0x554466, 1.2);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffdfa0, 0.9);
-  dirLight.position.set(20, 30, 10);
+  const dirLight = new THREE.DirectionalLight(0xffeedd, 1.1);
+  dirLight.position.set(25, 35, 15);
+  dirLight.castShadow = true;
   scene.add(dirLight);
 
-  createTerrain();
+  createLorenciaTerrain();
 
   player = new THREE.Group();
-  playerMeshGroup = createDarkKnightMesh();
+  playerMeshGroup = createDarkKnightModel();
   player.add(playerMeshGroup);
   
-  const playerLight = new THREE.PointLight(0x00aaff, 1.2, 12);
-  playerLight.position.set(0, 3, 0);
-  player.add(playerLight);
+  const auraLight = new THREE.PointLight(0x00aaff, 1.5, 10);
+  auraLight.position.set(0, 2, 0);
+  player.add(auraLight);
 
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  spawnEnemies(8);
+  spawnEnemies(10);
 
   window.addEventListener('resize', onWindowResize, false);
   window.addEventListener('pointerdown', onPointerDown, false);
@@ -116,170 +119,53 @@ function showWebGLError() {
   document.body.appendChild(errorContainer);
 }
 
-function createDarkKnightMesh() {
-  const group = new THREE.Group();
+// TEXTURA PROCEDURAL PARA EL PISO DE LORENCIA
+function createStoneTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
 
-  const armorMat = new THREE.MeshStandardMaterial({ color: 0x153866, metalness: 0.8, roughness: 0.2 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xffb700, metalness: 0.9, roughness: 0.1 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c });
+  ctx.fillStyle = '#1c1a17';
+  ctx.fillRect(0, 0, 512, 512);
 
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 1.3, 10), armorMat);
-  torso.position.y = 1.3;
-  group.add(torso);
+  ctx.strokeStyle = '#0d0c0a';
+  ctx.lineWidth = 4;
 
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.55), goldMat);
-  chest.position.set(0, 1.45, 0.05);
-  group.add(chest);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), skinMat);
-  head.position.y = 2.15;
-  group.add(head);
-
-  const helmet = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.6, 8), armorMat);
-  helmet.position.set(0, 2.35, 0);
-  group.add(helmet);
-
-  const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), goldMat);
-  shoulderL.position.set(-0.72, 1.7, 0);
-  group.add(shoulderL);
-
-  const shoulderR = shoulderL.clone();
-  shoulderR.position.x = 0.72;
-  group.add(shoulderR);
-
-  const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.8), armorMat);
-  armL.position.set(-0.65, 1.15, 0);
-  group.add(armL);
-
-  const armR = armL.clone();
-  armR.position.x = 0.65;
-  group.add(armR);
-
-  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 1.0), armorMat);
-  legL.position.set(-0.28, 0.5, 0);
-  group.add(legL);
-
-  const legR = legL.clone();
-  legR.position.x = 0.28;
-  group.add(legR);
-
-  playerWings = new THREE.Group();
-  const wingMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444, side: THREE.DoubleSide });
-  const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.0), wingMat);
-  wingL.position.set(-0.8, 1.7, -0.35);
-  wingL.rotation.y = Math.PI / 5;
-  
-  const wingR = wingL.clone();
-  wingR.position.x = 0.8;
-  wingR.rotation.y = -Math.PI / 5;
-  
-  playerWings.add(wingL, wingR);
-  group.add(playerWings);
-
-  playerSword = new THREE.Group();
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, 0.04), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 }));
-  blade.position.y = 0.9;
-  const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.12), goldMat);
-  hilt.position.y = 0.1;
-  playerSword.add(blade, hilt);
-  playerSword.position.set(0.65, 1.0, 0.3);
-  playerSword.rotation.x = Math.PI / 3;
-  group.add(playerSword);
-
-  return group;
-}
-
-function createSpiderMesh() {
-  const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.5 });
-
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 10), mat);
-  body.position.y = 0.55;
-  group.add(body);
-
-  const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 10), mat);
-  abdomen.position.set(0, 0.75, -1.0);
-  group.add(abdomen);
-
-  for (let i = 0; i < 8; i++) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.3), mat);
-    const side = i % 2 === 0 ? 1 : -1;
-    const row = Math.floor(i / 2);
-    leg.position.set(side * 0.65, 0.35, 0.3 - row * 0.32);
-    leg.rotation.z = side * (Math.PI / 3.8);
-    group.add(leg);
+  for (let i = 0; i < 512; i += 64) {
+    for (let j = 0; j < 512; j += 64) {
+      ctx.strokeRect(i, j, 64, 64);
+      ctx.fillStyle = Math.random() > 0.5 ? '#23201c' : '#191714';
+      ctx.fillRect(i + 2, j + 2, 60, 60);
+    }
   }
 
-  return group;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(12, 12);
+  return texture;
 }
 
-function createDragonMesh() {
-  const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x770099, roughness: 0.3 });
-  const wingMat = new THREE.MeshStandardMaterial({ color: 0x440066, side: THREE.DoubleSide });
-
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.75, 2.0, 8), mat);
-  body.rotation.x = Math.PI / 2.3;
-  body.position.y = 1.0;
-  group.add(body);
-
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.8), mat);
-  head.position.set(0, 1.6, 0.8);
-  group.add(head);
-
-  const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.2), wingMat);
-  wingL.position.set(-0.9, 1.4, -0.1);
-  wingL.rotation.y = Math.PI / 3.5;
-  const wingR = wingL.clone();
-  wingR.position.x = 0.9;
-  wingR.rotation.y = -Math.PI / 3.5;
-  group.add(wingL, wingR);
-
-  return group;
-}
-
-function createLichMesh() {
-  const group = new THREE.Group();
-  const robeMat = new THREE.MeshStandardMaterial({ color: 0x0a4a25, roughness: 0.7 });
-  const skullMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2 });
-  const orbMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-
-  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.85, 2.1, 10), robeMat);
-  robe.position.y = 1.05;
-  group.add(robe);
-
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 10), skullMat);
-  skull.position.y = 2.2;
-  group.add(skull);
-
-  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6), robeMat);
-  staff.position.set(-0.65, 1.3, 0.2);
-  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), orbMat);
-  orb.position.set(-0.65, 2.6, 0.2);
-  group.add(staff, orb);
-
-  return group;
-}
-
-function createTerrain() {
-  const floorGeo = new THREE.PlaneGeometry(90, 90);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x161a16, roughness: 0.9 });
+function createLorenciaTerrain() {
+  const floorGeo = new THREE.PlaneGeometry(100, 100);
+  const stoneTex = createStoneTexture();
+  const floorMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.8 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
   scene.add(floor);
 
-  const grid = new THREE.GridHelper(90, 45, 0x000000, 0x223322);
-  grid.position.y = 0.02;
-  scene.add(grid);
-
-  const torchPositions = [[-18, -18], [18, -18], [-18, 18], [18, 18]];
+  const torchPositions = [[-20, -20], [20, -20], [-20, 20], [20, 20]];
   torchPositions.forEach(pos => {
     const torch = new THREE.Group();
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.2), new THREE.MeshStandardMaterial({ color: 0x331100 }));
-    pole.position.y = 1.6;
+    const poleGeo = new THREE.CylinderGeometry(0.15, 0.25, 3.5, 8);
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x221100, metalness: 0.5 });
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.y = 1.75;
     
-    const fireLight = new THREE.PointLight(0xffaa00, 1.6, 14);
-    fireLight.position.y = 3.3;
+    const fireLight = new THREE.PointLight(0xff7700, 2.0, 16);
+    fireLight.position.y = 3.6;
 
     torch.add(pole, fireLight);
     torch.position.set(pos[0], 0, pos[1]);
@@ -289,13 +175,158 @@ function createTerrain() {
   });
 }
 
+// CABALLERO NEGRO DETALLADO (DARK KNIGHT)
+function createDarkKnightModel() {
+  const group = new THREE.Group();
+
+  const armorMat = new THREE.MeshStandardMaterial({ color: 0x1a2b4c, metalness: 0.8, roughness: 0.2 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xda100, metalness: 0.9, roughness: 0.1 });
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+
+  // Pechera estilizada
+  const chestGeo = new THREE.ConeGeometry(0.7, 1.4, 6);
+  const chest = new THREE.Mesh(chestGeo, armorMat);
+  chest.rotation.x = Math.PI;
+  chest.position.y = 1.4;
+  group.add(chest);
+
+  // Hombreras con pinchos
+  const shoulderGeo = new THREE.ConeGeometry(0.4, 0.8, 5);
+  const shoulderL = new THREE.Mesh(shoulderGeo, goldMat);
+  shoulderL.position.set(-0.8, 1.8, 0);
+  shoulderL.rotation.z = Math.PI / 3;
+
+  const shoulderR = shoulderL.clone();
+  shoulderR.position.x = 0.8;
+  shoulderR.rotation.z = -Math.PI / 3;
+  group.add(shoulderL, shoulderR);
+
+  // Casco con visera brillante
+  const helmetGeo = new THREE.DodecahedronGeometry(0.4);
+  const helmet = new THREE.Mesh(helmetGeo, armorMat);
+  helmet.position.y = 2.3;
+
+  const visorGeo = new THREE.BoxGeometry(0.35, 0.08, 0.2);
+  const visor = new THREE.Mesh(visorGeo, glowMat);
+  visor.position.set(0, 2.3, 0.3);
+
+  group.add(helmet, visor);
+
+  // Alas de Dragón estilo MU (Satan Wings)
+  playerWings = new THREE.Group();
+  const wingShape = new THREE.Shape();
+  wingShape.moveTo(0, 0);
+  wingShape.lineTo(1.2, 1.5);
+  wingShape.lineTo(2.2, 1.0);
+  wingShape.lineTo(1.5, 0.2);
+  wingShape.lineTo(2.0, -0.8);
+  wingShape.lineTo(0.8, -0.3);
+  wingShape.lineTo(0, 0);
+
+  const wingGeo = new THREE.ShapeGeometry(wingShape);
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xff2200, side: THREE.DoubleSide });
+
+  const wingL = new THREE.Mesh(wingGeo, wingMat);
+  wingL.position.set(-0.2, 1.6, -0.3);
+  wingL.rotation.y = Math.PI / 4;
+
+  const wingR = new THREE.Mesh(wingGeo, wingMat);
+  wingR.position.set(0.2, 1.6, -0.3);
+  wingR.scale.x = -1;
+  wingR.rotation.y = -Math.PI / 4;
+
+  playerWings.add(wingL, wingR);
+  group.add(playerWings);
+
+  // Espada Legendaria
+  playerSword = new THREE.Group();
+  const bladeGeo = new THREE.ConeGeometry(0.12, 2.2, 4);
+  const bladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.1, emissive: 0x0044aa });
+  const blade = new THREE.Mesh(bladeGeo, bladeMat);
+  blade.position.y = 1.1;
+
+  const hiltGeo = new THREE.BoxGeometry(0.6, 0.1, 0.15);
+  const hilt = new THREE.Mesh(hiltGeo, goldMat);
+  hilt.position.y = 0.1;
+
+  playerSword.add(blade, hilt);
+  playerSword.position.set(0.7, 1.2, 0.2);
+  playerSword.rotation.x = Math.PI / 3;
+  group.add(playerSword);
+
+  return group;
+}
+
+// MONSTRUO: ARAÑA
+function createSpiderModel() {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xaa1100, roughness: 0.4 });
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+
+  const bodyGeo = new THREE.IcosahedronGeometry(0.7, 1);
+  const body = new THREE.Mesh(bodyGeo, mat);
+  body.position.y = 0.6;
+  group.add(body);
+
+  const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeL.position.set(-0.2, 0.7, 0.6);
+  const eyeR = eyeL.clone();
+  eyeR.position.x = 0.2;
+  group.add(eyeL, eyeR);
+
+  return group;
+}
+
+// MONSTRUO: BUDGE DRAGON
+function createDragonModel() {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0x8800bb, roughness: 0.3 });
+  const wingMat = new THREE.MeshStandardMaterial({ color: 0x440066, side: THREE.DoubleSide });
+
+  const bodyGeo = new THREE.ConeGeometry(0.8, 2.2, 5);
+  const body = new THREE.Mesh(bodyGeo, mat);
+  body.rotation.x = Math.PI / 2.2;
+  body.position.y = 1.1;
+  group.add(body);
+
+  const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.4), wingMat);
+  wingL.position.set(-1.0, 1.5, 0);
+  wingL.rotation.y = Math.PI / 3;
+  const wingR = wingL.clone();
+  wingR.position.x = 1.0;
+  wingR.rotation.y = -Math.PI / 3;
+  group.add(wingL, wingR);
+
+  return group;
+}
+
+// MONSTRUO: LICH
+function createLichModel() {
+  const group = new THREE.Group();
+  const robeMat = new THREE.MeshStandardMaterial({ color: 0x053315, roughness: 0.6 });
+  const staffOrbMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+
+  const robeGeo = new THREE.CylinderGeometry(0.2, 0.9, 2.4, 7);
+  const robe = new THREE.Mesh(robeGeo, robeMat);
+  robe.position.y = 1.2;
+  group.add(robe);
+
+  const orbGeo = new THREE.SphereGeometry(0.25, 8, 8);
+  const orb = new THREE.Mesh(orbGeo, staffOrbMat);
+  orb.position.set(-0.7, 2.7, 0.3);
+  group.add(orb);
+
+  return group;
+}
+
 function spawnEnemy(x, z) {
   const enemyData = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
   let mesh;
 
-  if (enemyData.type === 'spider') mesh = createSpiderMesh();
-  else if (enemyData.type === 'dragon') mesh = createDragonMesh();
-  else mesh = createLichMesh();
+  if (enemyData.type === 'spider') mesh = createSpiderModel();
+  else if (enemyData.type === 'dragon') mesh = createDragonModel();
+  else mesh = createLichModel();
 
   mesh.position.set(x, 0, z);
   mesh.userData = {
@@ -313,8 +344,8 @@ function spawnEnemy(x, z) {
 
 function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
-    const x = (Math.random() - 0.5) * 65;
-    const z = (Math.random() - 0.5) * 65;
+    const x = (Math.random() - 0.5) * 70;
+    const z = (Math.random() - 0.5) * 70;
     if (Math.abs(x) > 8 || Math.abs(z) > 8) {
       spawnEnemy(x, z);
     }
@@ -375,24 +406,53 @@ function onPointerDown(event) {
   }
 }
 
+function createSlashEffect(position) {
+  const pGeo = new THREE.BufferGeometry();
+  const count = 12;
+  const posArray = new Float32Array(count * 3);
+
+  for (let i = 0; i < count * 3; i++) {
+    posArray[i] = (Math.random() - 0.5) * 2.0;
+  }
+
+  pGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+  const pMat = new THREE.PointsMaterial({ size: 0.15, color: 0x00ffff });
+  const pSystem = new THREE.Points(pGeo, pMat);
+  pSystem.position.copy(position);
+  pSystem.position.y += 1.2;
+
+  scene.add(pSystem);
+  particles.push({ mesh: pSystem, life: 1.0 });
+}
+
 function animate(time) {
   requestAnimationFrame(animate);
   time = time || performance.now();
 
   torches.forEach(t => {
-    t.intensity = 1.3 + Math.sin(time * 0.01 + Math.random() * 0.2) * 0.3;
+    t.intensity = 1.6 + Math.sin(time * 0.01 + Math.random() * 0.2) * 0.4;
   });
 
   if (playerWings) {
-    playerWings.children[0].rotation.y = (Math.PI / 5) + Math.sin(time * 0.005) * 0.1;
-    playerWings.children[1].rotation.y = -(Math.PI / 5) - Math.sin(time * 0.005) * 0.1;
+    playerWings.children[0].rotation.y = (Math.PI / 4) + Math.sin(time * 0.006) * 0.15;
+    playerWings.children[1].rotation.y = -(Math.PI / 4) - Math.sin(time * 0.006) * 0.15;
+  }
+
+  // Animación de partículas de golpe
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].life -= 0.05;
+    particles[i].mesh.scale.multiplyScalar(1.05);
+    if (particles[i].life <= 0) {
+      scene.remove(particles[i].mesh);
+      particles.splice(i, 1);
+    }
   }
 
   if (targetPosition) {
     const distance = player.position.distanceTo(targetPosition);
     if (distance > 0.2) {
       const direction = new THREE.Vector3().subVectors(targetPosition, player.position).normalize();
-      const moveSpeed = 0.18 + (playerStats.agi * 0.001);
+      const moveSpeed = 0.20 + (playerStats.agi * 0.001);
       player.position.addScaledVector(direction, moveSpeed);
       
       const angle = Math.atan2(direction.x, direction.z);
@@ -410,10 +470,10 @@ function animate(time) {
     playerMeshGroup.rotation.y = Math.atan2(dirToEnemy.x, dirToEnemy.z);
 
     if (distanceToEnemy > playerStats.attackRange) {
-      player.position.addScaledVector(dirToEnemy, 0.18);
+      player.position.addScaledVector(dirToEnemy, 0.20);
       updateCamera();
     } else {
-      if (time - lastAttackTime > Math.max(250, playerStats.attackSpeed - playerStats.agi * 3)) {
+      if (time - lastAttackTime > Math.max(220, playerStats.attackSpeed - playerStats.agi * 3)) {
         attackEnemy(targetEnemy);
         lastAttackTime = time;
       }
@@ -421,12 +481,12 @@ function animate(time) {
   }
 
   enemies.forEach((enemy, idx) => {
-    enemy.rotation.y += 0.01;
-    enemy.position.y = Math.sin(time * 0.003 + idx) * 0.1;
+    enemy.rotation.y += 0.015;
+    enemy.position.y = Math.sin(time * 0.004 + idx) * 0.12;
   });
 
   if (isAttacking) {
-    playerSword.rotation.x += 0.25;
+    playerSword.rotation.x += 0.35;
     if (playerSword.rotation.x > Math.PI) {
       playerSword.rotation.x = Math.PI / 3;
       isAttacking = false;
@@ -440,17 +500,18 @@ function animate(time) {
 
 function attackEnemy(enemy) {
   isAttacking = true;
-  const baseDamage = 20 + Math.floor(playerStats.str * 1.2);
-  const actualDamage = baseDamage + Math.floor(Math.random() * 15) - 5;
+  const baseDamage = 25 + Math.floor(playerStats.str * 1.3);
+  const actualDamage = baseDamage + Math.floor(Math.random() * 18) - 5;
   enemy.userData.hp -= actualDamage;
 
   showDamageText(actualDamage, enemy.position);
+  createSlashEffect(enemy.position);
 
   enemy.traverse((child) => {
-    if (child.isMesh) {
+    if (child.isMesh && child.material.color) {
       const originalColor = child.material.color.getHex();
-      child.material.color.setHex(0xff0000);
-      setTimeout(() => child.material.color.setHex(originalColor), 100);
+      child.material.color.setHex(0xffffff);
+      setTimeout(() => child.material.color.setHex(originalColor), 120);
     }
   });
 
@@ -465,10 +526,10 @@ function attackEnemy(enemy) {
     updateHUD();
 
     setTimeout(() => {
-      const x = (Math.random() - 0.5) * 65;
-      const z = (Math.random() - 0.5) * 65;
+      const x = (Math.random() - 0.5) * 70;
+      const z = (Math.random() - 0.5) * 70;
       spawnEnemy(x, z);
-    }, 2500);
+    }, 2000);
   }
 }
 
@@ -491,7 +552,7 @@ function showDamageText(damage, position) {
 
   setTimeout(() => {
     if (div.parentNode) div.parentNode.removeChild(div);
-  }, 800);
+  }, 750);
 }
 
 function gainExperience(amount) {
@@ -555,8 +616,8 @@ function updateHUD() {
 
 function updateCamera() {
   if (camera && player) {
-    camera.position.x = player.position.x + 22;
-    camera.position.z = player.position.z + 22;
+    camera.position.x = player.position.x + 20;
+    camera.position.z = player.position.z + 20;
   }
 }
 
@@ -574,7 +635,7 @@ function rewardAd(event) {
 function onWindowResize() {
   if (!renderer || !camera) return;
   const aspect = window.innerWidth / window.innerHeight;
-  const d = 20;
+  const d = 18;
   camera.left = -d * aspect;
   camera.right = d * aspect;
   camera.top = d;
