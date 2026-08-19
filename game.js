@@ -20,8 +20,8 @@ let playerStats = {
   maxExp: 100,
   zen: 0,
   gems: 0,
-  attackRange: 3.5,
-  attackSpeed: 500
+  attackRange: 3.2,
+  attackSpeed: 450
 };
 
 let lastAttackTime = 0;
@@ -29,9 +29,9 @@ let isAttacking = false;
 let enemies = [];
 
 const ENEMY_TYPES = [
-  { type: 'spider', name: "Giant Spider", hp: 60, exp: 40, zen: 25 },
-  { type: 'dragon', name: "Budge Dragon", hp: 110, exp: 75, zen: 55 },
-  { type: 'lich', name: "Lich", hp: 170, exp: 130, zen: 95 }
+  { type: 'spider', name: "Giant Spider", hp: 60, exp: 40, zen: 30 },
+  { type: 'dragon', name: "Budge Dragon", hp: 120, exp: 80, zen: 60 },
+  { type: 'lich', name: "Lich", hp: 180, exp: 140, zen: 100 }
 ];
 
 function init() {
@@ -46,25 +46,24 @@ function init() {
     document.body.appendChild(renderer.domElement);
   } catch (e) {
     console.error("Error al inicializar WebGL:", e);
-    showWebGLError();
     return;
   }
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05040a);
-  scene.fog = new THREE.FogExp2(0x05040a, 0.015);
+  scene.background = new THREE.Color(0x020204);
+  scene.fog = new THREE.FogExp2(0x020204, 0.018);
 
   const aspect = window.innerWidth / window.innerHeight;
-  const d = 18;
+  const d = 16;
   camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-  camera.position.set(20, 22, 20);
+  camera.position.set(22, 24, 22);
   camera.lookAt(0, 0, 0);
 
-  const ambientLight = new THREE.AmbientLight(0x554466, 1.2);
+  const ambientLight = new THREE.AmbientLight(0x443355, 1.3);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffeedd, 1.1);
-  dirLight.position.set(25, 35, 15);
+  const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+  dirLight.position.set(20, 30, 15);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
@@ -74,14 +73,14 @@ function init() {
   playerMeshGroup = createDarkKnightModel();
   player.add(playerMeshGroup);
   
-  const auraLight = new THREE.PointLight(0x00aaff, 1.5, 10);
+  const auraLight = new THREE.PointLight(0x00ccff, 2.0, 8);
   auraLight.position.set(0, 2, 0);
   player.add(auraLight);
 
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  spawnEnemies(10);
+  spawnEnemies(12);
 
   window.addEventListener('resize', onWindowResize, false);
   window.addEventListener('pointerdown', onPointerDown, false);
@@ -91,232 +90,161 @@ function init() {
   animate(performance.now());
 }
 
-function showWebGLError() {
-  const errorContainer = document.createElement('div');
-  errorContainer.style.position = 'fixed';
-  errorContainer.style.top = '0';
-  errorContainer.style.left = '0';
-  errorContainer.style.width = '100vw';
-  errorContainer.style.height = '100vh';
-  errorContainer.style.backgroundColor = '#0c0d12';
-  errorContainer.style.color = '#ff5555';
-  errorContainer.style.display = 'flex';
-  errorContainer.style.flexDirection = 'column';
-  errorContainer.style.justifyContent = 'center';
-  errorContainer.style.alignItems = 'center';
-  errorContainer.style.zIndex = '99999';
-  errorContainer.style.fontFamily = 'Arial, sans-serif';
-  errorContainer.style.textAlign = 'center';
-  errorContainer.style.padding = '20px';
-
-  errorContainer.innerHTML = `
-    <h1 style="color: #ffd700; margin-bottom: 10px;">⚠️ WebGL No Disponible</h1>
-    <p style="color: #e0e0e0; max-width: 600px; line-height: 1.5;">
-      Tu navegador o tarjeta gráfica no tienen habilitada la aceleración 3D por hardware (WebGL).
-    </p>
-  `;
-
-  document.body.appendChild(errorContainer);
-}
-
-// TEXTURA PROCEDURAL PARA EL PISO DE LORENCIA
-function createStoneTexture() {
+// TEXTURA Y PISO DE LORENCIA ESTILO MU
+function createLorenciaTerrain() {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 256;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#1c1a17';
-  ctx.fillRect(0, 0, 512, 512);
+  ctx.fillStyle = '#14110e';
+  ctx.fillRect(0, 0, 256, 256);
 
-  ctx.strokeStyle = '#0d0c0a';
-  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#080705';
+  ctx.lineWidth = 6;
 
-  for (let i = 0; i < 512; i += 64) {
-    for (let j = 0; j < 512; j += 64) {
-      ctx.strokeRect(i, j, 64, 64);
-      ctx.fillStyle = Math.random() > 0.5 ? '#23201c' : '#191714';
-      ctx.fillRect(i + 2, j + 2, 60, 60);
+  for (let i = 0; i < 256; i += 32) {
+    for (let j = 0; j < 256; j += 32) {
+      ctx.strokeRect(i, j, 32, 32);
+      if ((i + j) % 64 === 0) {
+        ctx.fillStyle = '#1a1612';
+        ctx.fillRect(i + 3, j + 3, 26, 26);
+      }
     }
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(12, 12);
-  return texture;
-}
+  texture.repeat.set(20, 20);
 
-function createLorenciaTerrain() {
-  const floorGeo = new THREE.PlaneGeometry(100, 100);
-  const stoneTex = createStoneTexture();
-  const floorMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.8 });
+  const floorGeo = new THREE.PlaneGeometry(120, 120);
+  const floorMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const torchPositions = [[-20, -20], [20, -20], [-20, 20], [20, 20]];
+  // Antorchas
+  const torchPositions = [[-15, -15], [15, -15], [-15, 15], [15, 15]];
   torchPositions.forEach(pos => {
     const torch = new THREE.Group();
-    const poleGeo = new THREE.CylinderGeometry(0.15, 0.25, 3.5, 8);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x221100, metalness: 0.5 });
+    const poleGeo = new THREE.CylinderGeometry(0.12, 0.2, 3, 6);
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x110b05 });
     const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 1.75;
-    
-    const fireLight = new THREE.PointLight(0xff7700, 2.0, 16);
-    fireLight.position.y = 3.6;
+    pole.position.y = 1.5;
+
+    const fireLight = new THREE.PointLight(0xff6600, 2.5, 14);
+    fireLight.position.y = 3.2;
 
     torch.add(pole, fireLight);
     torch.position.set(pos[0], 0, pos[1]);
     scene.add(torch);
-
     torches.push(fireLight);
   });
 }
 
-// CABALLERO NEGRO DETALLADO (DARK KNIGHT)
+// DARK KNIGHT CON EFECTOS BRILLANTES (EXCELENT + BRILLO)
 function createDarkKnightModel() {
   const group = new THREE.Group();
 
-  const armorMat = new THREE.MeshStandardMaterial({ color: 0x1a2b4c, metalness: 0.8, roughness: 0.2 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xda100, metalness: 0.9, roughness: 0.1 });
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+  const armorMat = new THREE.MeshStandardMaterial({ 
+    color: 0x0a2244, 
+    metalness: 0.85, 
+    roughness: 0.15,
+    emissive: 0x001133
+  });
 
-  // Pechera estilizada
-  const chestGeo = new THREE.ConeGeometry(0.7, 1.4, 6);
-  const chest = new THREE.Mesh(chestGeo, armorMat);
-  chest.rotation.x = Math.PI;
-  chest.position.y = 1.4;
+  const goldMat = new THREE.MeshStandardMaterial({ 
+    color: 0xffaa00, 
+    metalness: 0.9, 
+    roughness: 0.1 
+  });
+
+  // Pecho
+  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 1.2, 6), armorMat);
+  chest.position.y = 1.3;
   group.add(chest);
 
-  // Hombreras con pinchos
-  const shoulderGeo = new THREE.ConeGeometry(0.4, 0.8, 5);
-  const shoulderL = new THREE.Mesh(shoulderGeo, goldMat);
-  shoulderL.position.set(-0.8, 1.8, 0);
-  shoulderL.rotation.z = Math.PI / 3;
+  // Hombreras puntiagudas
+  const shoulderL = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 5), goldMat);
+  shoulderL.position.set(-0.75, 1.7, 0);
+  shoulderL.rotation.z = Math.PI / 2.8;
 
   const shoulderR = shoulderL.clone();
-  shoulderR.position.x = 0.8;
-  shoulderR.rotation.z = -Math.PI / 3;
+  shoulderR.position.x = 0.75;
+  shoulderR.rotation.z = -Math.PI / 2.8;
   group.add(shoulderL, shoulderR);
 
-  // Casco con visera brillante
-  const helmetGeo = new THREE.DodecahedronGeometry(0.4);
-  const helmet = new THREE.Mesh(helmetGeo, armorMat);
-  helmet.position.y = 2.3;
-
-  const visorGeo = new THREE.BoxGeometry(0.35, 0.08, 0.2);
-  const visor = new THREE.Mesh(visorGeo, glowMat);
-  visor.position.set(0, 2.3, 0.3);
-
+  // Casco Dragon Helmet
+  const helmet = new THREE.Mesh(new THREE.DodecahedronGeometry(0.38), armorMat);
+  helmet.position.y = 2.1;
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.15), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+  visor.position.set(0, 2.1, 0.25);
   group.add(helmet, visor);
 
-  // Alas de Dragón estilo MU (Satan Wings)
+  // Alas de Dragón Estilo MU (Dragon Wings)
   playerWings = new THREE.Group();
   const wingShape = new THREE.Shape();
   wingShape.moveTo(0, 0);
-  wingShape.lineTo(1.2, 1.5);
-  wingShape.lineTo(2.2, 1.0);
-  wingShape.lineTo(1.5, 0.2);
-  wingShape.lineTo(2.0, -0.8);
-  wingShape.lineTo(0.8, -0.3);
+  wingShape.lineTo(1.5, 1.8);
+  wingShape.lineTo(2.5, 1.2);
+  wingShape.lineTo(1.8, 0.2);
+  wingShape.lineTo(2.2, -0.6);
   wingShape.lineTo(0, 0);
 
   const wingGeo = new THREE.ShapeGeometry(wingShape);
-  const wingMat = new THREE.MeshBasicMaterial({ color: 0xff2200, side: THREE.DoubleSide });
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xff1100, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
 
   const wingL = new THREE.Mesh(wingGeo, wingMat);
-  wingL.position.set(-0.2, 1.6, -0.3);
-  wingL.rotation.y = Math.PI / 4;
+  wingL.position.set(-0.1, 1.5, -0.2);
+  wingL.rotation.y = Math.PI / 3.5;
 
   const wingR = new THREE.Mesh(wingGeo, wingMat);
-  wingR.position.set(0.2, 1.6, -0.3);
+  wingR.position.set(0.1, 1.5, -0.2);
   wingR.scale.x = -1;
-  wingR.rotation.y = -Math.PI / 4;
+  wingR.rotation.y = -Math.PI / 3.5;
 
   playerWings.add(wingL, wingR);
   group.add(playerWings);
 
-  // Espada Legendaria
+  // Espada (Knight Blade / Archangel Sword)
   playerSword = new THREE.Group();
-  const bladeGeo = new THREE.ConeGeometry(0.12, 2.2, 4);
-  const bladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.1, emissive: 0x0044aa });
-  const blade = new THREE.Mesh(bladeGeo, bladeMat);
-  blade.position.y = 1.1;
-
-  const hiltGeo = new THREE.BoxGeometry(0.6, 0.1, 0.15);
-  const hilt = new THREE.Mesh(hiltGeo, goldMat);
-  hilt.position.y = 0.1;
-
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.0, 0.25), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.95, roughness: 0.05, emissive: 0x0066ff }));
+  blade.position.y = 1.0;
+  const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.12), goldMat);
+  hilt.position.y = 0.0;
   playerSword.add(blade, hilt);
-  playerSword.position.set(0.7, 1.2, 0.2);
+  playerSword.position.set(0.65, 1.1, 0.1);
   playerSword.rotation.x = Math.PI / 3;
   group.add(playerSword);
 
   return group;
 }
 
-// MONSTRUO: ARAÑA
+// MONSTRUOS
 function createSpiderModel() {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xaa1100, roughness: 0.4 });
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-
-  const bodyGeo = new THREE.IcosahedronGeometry(0.7, 1);
-  const body = new THREE.Mesh(bodyGeo, mat);
-  body.position.y = 0.6;
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 1), new THREE.MeshStandardMaterial({ color: 0xaa1100, roughness: 0.5 }));
+  body.position.y = 0.5;
   group.add(body);
-
-  const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.2, 0.7, 0.6);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.2;
-  group.add(eyeL, eyeR);
-
   return group;
 }
 
-// MONSTRUO: BUDGE DRAGON
 function createDragonModel() {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x8800bb, roughness: 0.3 });
-  const wingMat = new THREE.MeshStandardMaterial({ color: 0x440066, side: THREE.DoubleSide });
-
-  const bodyGeo = new THREE.ConeGeometry(0.8, 2.2, 5);
-  const body = new THREE.Mesh(bodyGeo, mat);
-  body.rotation.x = Math.PI / 2.2;
-  body.position.y = 1.1;
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.0, 5), new THREE.MeshStandardMaterial({ color: 0x7700aa }));
+  body.rotation.x = Math.PI / 2.3;
+  body.position.y = 1.0;
   group.add(body);
-
-  const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.4), wingMat);
-  wingL.position.set(-1.0, 1.5, 0);
-  wingL.rotation.y = Math.PI / 3;
-  const wingR = wingL.clone();
-  wingR.position.x = 1.0;
-  wingR.rotation.y = -Math.PI / 3;
-  group.add(wingL, wingR);
-
   return group;
 }
 
-// MONSTRUO: LICH
 function createLichModel() {
   const group = new THREE.Group();
-  const robeMat = new THREE.MeshStandardMaterial({ color: 0x053315, roughness: 0.6 });
-  const staffOrbMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-
-  const robeGeo = new THREE.CylinderGeometry(0.2, 0.9, 2.4, 7);
-  const robe = new THREE.Mesh(robeGeo, robeMat);
-  robe.position.y = 1.2;
+  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.8, 2.2, 6), new THREE.MeshStandardMaterial({ color: 0x004422 }));
+  robe.position.y = 1.1;
   group.add(robe);
-
-  const orbGeo = new THREE.SphereGeometry(0.25, 8, 8);
-  const orb = new THREE.Mesh(orbGeo, staffOrbMat);
-  orb.position.set(-0.7, 2.7, 0.3);
-  group.add(orb);
-
   return group;
 }
 
@@ -344,9 +272,9 @@ function spawnEnemy(x, z) {
 
 function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
-    const x = (Math.random() - 0.5) * 70;
-    const z = (Math.random() - 0.5) * 70;
-    if (Math.abs(x) > 8 || Math.abs(z) > 8) {
+    const x = (Math.random() - 0.5) * 60;
+    const z = (Math.random() - 0.5) * 60;
+    if (Math.abs(x) > 6 || Math.abs(z) > 6) {
       spawnEnemy(x, z);
     }
   }
@@ -354,7 +282,6 @@ function spawnEnemies(count) {
 
 function addStat(type) {
   if (playerStats.points <= 0) return;
-
   if (type === 'str') playerStats.str += 5;
   if (type === 'agi') playerStats.agi += 5;
   if (type === 'vit') playerStats.vit += 5;
@@ -408,18 +335,18 @@ function onPointerDown(event) {
 
 function createSlashEffect(position) {
   const pGeo = new THREE.BufferGeometry();
-  const count = 12;
+  const count = 16;
   const posArray = new Float32Array(count * 3);
 
   for (let i = 0; i < count * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 2.0;
+    posArray[i] = (Math.random() - 0.5) * 2.2;
   }
 
   pGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-  const pMat = new THREE.PointsMaterial({ size: 0.15, color: 0x00ffff });
+  const pMat = new THREE.PointsMaterial({ size: 0.2, color: 0x00ffff });
   const pSystem = new THREE.Points(pGeo, pMat);
   pSystem.position.copy(position);
-  pSystem.position.y += 1.2;
+  pSystem.position.y += 1.0;
 
   scene.add(pSystem);
   particles.push({ mesh: pSystem, life: 1.0 });
@@ -430,18 +357,17 @@ function animate(time) {
   time = time || performance.now();
 
   torches.forEach(t => {
-    t.intensity = 1.6 + Math.sin(time * 0.01 + Math.random() * 0.2) * 0.4;
+    t.intensity = 2.0 + Math.sin(time * 0.012 + Math.random() * 0.1) * 0.5;
   });
 
   if (playerWings) {
-    playerWings.children[0].rotation.y = (Math.PI / 4) + Math.sin(time * 0.006) * 0.15;
-    playerWings.children[1].rotation.y = -(Math.PI / 4) - Math.sin(time * 0.006) * 0.15;
+    playerWings.children[0].rotation.y = (Math.PI / 3.5) + Math.sin(time * 0.007) * 0.12;
+    playerWings.children[1].rotation.y = -(Math.PI / 3.5) - Math.sin(time * 0.007) * 0.12;
   }
 
-  // Animación de partículas de golpe
   for (let i = particles.length - 1; i >= 0; i--) {
-    particles[i].life -= 0.05;
-    particles[i].mesh.scale.multiplyScalar(1.05);
+    particles[i].life -= 0.06;
+    particles[i].mesh.scale.multiplyScalar(1.04);
     if (particles[i].life <= 0) {
       scene.remove(particles[i].mesh);
       particles.splice(i, 1);
@@ -452,7 +378,7 @@ function animate(time) {
     const distance = player.position.distanceTo(targetPosition);
     if (distance > 0.2) {
       const direction = new THREE.Vector3().subVectors(targetPosition, player.position).normalize();
-      const moveSpeed = 0.20 + (playerStats.agi * 0.001);
+      const moveSpeed = 0.18 + (playerStats.agi * 0.001);
       player.position.addScaledVector(direction, moveSpeed);
       
       const angle = Math.atan2(direction.x, direction.z);
@@ -470,10 +396,10 @@ function animate(time) {
     playerMeshGroup.rotation.y = Math.atan2(dirToEnemy.x, dirToEnemy.z);
 
     if (distanceToEnemy > playerStats.attackRange) {
-      player.position.addScaledVector(dirToEnemy, 0.20);
+      player.position.addScaledVector(dirToEnemy, 0.18);
       updateCamera();
     } else {
-      if (time - lastAttackTime > Math.max(220, playerStats.attackSpeed - playerStats.agi * 3)) {
+      if (time - lastAttackTime > Math.max(200, playerStats.attackSpeed - playerStats.agi * 2.5)) {
         attackEnemy(targetEnemy);
         lastAttackTime = time;
       }
@@ -481,12 +407,12 @@ function animate(time) {
   }
 
   enemies.forEach((enemy, idx) => {
-    enemy.rotation.y += 0.015;
-    enemy.position.y = Math.sin(time * 0.004 + idx) * 0.12;
+    enemy.rotation.y += 0.01;
+    enemy.position.y = Math.sin(time * 0.005 + idx) * 0.08;
   });
 
   if (isAttacking) {
-    playerSword.rotation.x += 0.35;
+    playerSword.rotation.x += 0.4;
     if (playerSword.rotation.x > Math.PI) {
       playerSword.rotation.x = Math.PI / 3;
       isAttacking = false;
@@ -500,20 +426,12 @@ function animate(time) {
 
 function attackEnemy(enemy) {
   isAttacking = true;
-  const baseDamage = 25 + Math.floor(playerStats.str * 1.3);
-  const actualDamage = baseDamage + Math.floor(Math.random() * 18) - 5;
+  const baseDamage = 20 + Math.floor(playerStats.str * 1.2);
+  const actualDamage = baseDamage + Math.floor(Math.random() * 15);
   enemy.userData.hp -= actualDamage;
 
   showDamageText(actualDamage, enemy.position);
   createSlashEffect(enemy.position);
-
-  enemy.traverse((child) => {
-    if (child.isMesh && child.material.color) {
-      const originalColor = child.material.color.getHex();
-      child.material.color.setHex(0xffffff);
-      setTimeout(() => child.material.color.setHex(originalColor), 120);
-    }
-  });
 
   if (enemy.userData.hp <= 0) {
     gainExperience(enemy.userData.expReward);
@@ -526,8 +444,8 @@ function attackEnemy(enemy) {
     updateHUD();
 
     setTimeout(() => {
-      const x = (Math.random() - 0.5) * 70;
-      const z = (Math.random() - 0.5) * 70;
+      const x = (Math.random() - 0.5) * 60;
+      const z = (Math.random() - 0.5) * 60;
       spawnEnemy(x, z);
     }, 2000);
   }
@@ -539,7 +457,7 @@ function showDamageText(damage, position) {
   div.innerText = `-${damage}`;
 
   const vector = position.clone();
-  vector.y += 2.2;
+  vector.y += 2.0;
   vector.project(camera);
 
   const x = (vector.x * .5 + .5) * window.innerWidth;
@@ -552,7 +470,7 @@ function showDamageText(damage, position) {
 
   setTimeout(() => {
     if (div.parentNode) div.parentNode.removeChild(div);
-  }, 750);
+  }, 600);
 }
 
 function gainExperience(amount) {
@@ -562,7 +480,7 @@ function gainExperience(amount) {
     playerStats.level++;
     playerStats.points += 5;
     playerStats.exp -= playerStats.maxExp;
-    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.5);
+    playerStats.maxExp = Math.floor(playerStats.maxExp * 1.4);
 
     recalculateStats();
     playerStats.hp = playerStats.maxHp;
@@ -575,49 +493,32 @@ function gainExperience(amount) {
 }
 
 function updateHUD() {
-  const levelEl = document.getElementById('player-level');
-  if (levelEl) levelEl.innerText = playerStats.level;
+  document.getElementById('player-level').innerText = playerStats.level;
+  document.getElementById('player-zen').innerText = playerStats.zen;
+  document.getElementById('player-gems').innerText = playerStats.gems;
 
-  const zenEl = document.getElementById('player-zen');
-  if (zenEl) zenEl.innerText = playerStats.zen;
+  const hpPercent = Math.max(0, (playerStats.hp / playerStats.maxHp) * 100);
+  document.getElementById('hp-orb').style.height = `${hpPercent}%`;
+  document.getElementById('hp-text').innerText = `${playerStats.hp}/${playerStats.maxHp}`;
 
-  const gemsEl = document.getElementById('player-gems');
-  if (gemsEl) gemsEl.innerText = playerStats.gems;
+  const mpPercent = Math.max(0, (playerStats.mp / playerStats.maxMp) * 100);
+  document.getElementById('mp-orb').style.height = `${mpPercent}%`;
+  document.getElementById('mp-text').innerText = `${playerStats.mp}/${playerStats.maxMp}`;
 
-  const hpOrb = document.getElementById('hp-orb');
-  if (hpOrb) {
-    const hpPercent = Math.max(0, (playerStats.hp / playerStats.maxHp) * 100);
-    hpOrb.style.height = `${hpPercent}%`;
-    document.getElementById('hp-text').innerText = `${playerStats.hp}/${playerStats.maxHp}`;
-  }
+  const expPercent = Math.min(100, (playerStats.exp / playerStats.maxExp) * 100);
+  document.getElementById('exp-fill').style.width = `${expPercent}%`;
 
-  const mpOrb = document.getElementById('mp-orb');
-  if (mpOrb) {
-    const mpPercent = Math.max(0, (playerStats.mp / playerStats.maxMp) * 100);
-    mpOrb.style.height = `${mpPercent}%`;
-    document.getElementById('mp-text').innerText = `${playerStats.mp}/${playerStats.maxMp}`;
-  }
-
-  const expFill = document.getElementById('exp-fill');
-  if (expFill) {
-    const expPercent = Math.min(100, (playerStats.exp / playerStats.maxExp) * 100);
-    expFill.style.width = `${expPercent}%`;
-  }
-
-  const statPts = document.getElementById('stat-points');
-  if (statPts) {
-    statPts.innerText = playerStats.points;
-    document.getElementById('stat-str').innerText = playerStats.str;
-    document.getElementById('stat-agi').innerText = playerStats.agi;
-    document.getElementById('stat-vit').innerText = playerStats.vit;
-    document.getElementById('stat-ene').innerText = playerStats.ene;
-  }
+  document.getElementById('stat-points').innerText = playerStats.points;
+  document.getElementById('stat-str').innerText = playerStats.str;
+  document.getElementById('stat-agi').innerText = playerStats.agi;
+  document.getElementById('stat-vit').innerText = playerStats.vit;
+  document.getElementById('stat-ene').innerText = playerStats.ene;
 }
 
 function updateCamera() {
   if (camera && player) {
-    camera.position.x = player.position.x + 20;
-    camera.position.z = player.position.z + 20;
+    camera.position.x = player.position.x + 22;
+    camera.position.z = player.position.z + 22;
   }
 }
 
@@ -635,7 +536,7 @@ function rewardAd(event) {
 function onWindowResize() {
   if (!renderer || !camera) return;
   const aspect = window.innerWidth / window.innerHeight;
-  const d = 18;
+  const d = 16;
   camera.left = -d * aspect;
   camera.right = d * aspect;
   camera.top = d;
