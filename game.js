@@ -1,7 +1,3 @@
-// ==========================================
-// MUNDO ONLINE - Motor 3D MMORPG (MU Online Style)
-// ==========================================
-
 let scene, camera, renderer, player, playerMeshGroup, playerSword, playerWings;
 let targetPosition = null;
 let targetEnemy = null;
@@ -40,7 +36,6 @@ const ENEMY_TYPES = [
 function init() {
   if (renderer) return;
 
-  // 1. Verificar e Inicializar Renderizador WebGL con manejo de errores
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -53,19 +48,16 @@ function init() {
     return;
   }
 
-  // 2. Escena
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x040308);
   scene.fog = new THREE.FogExp2(0x040308, 0.018);
 
-  // 3. Cámara Ortográfica Isométrica
   const aspect = window.innerWidth / window.innerHeight;
   const d = 20;
   camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
   camera.position.set(22, 24, 22);
   camera.lookAt(0, 0, 0);
 
-  // 4. Luces
   const ambientLight = new THREE.AmbientLight(0x403550, 0.9);
   scene.add(ambientLight);
 
@@ -73,10 +65,8 @@ function init() {
   dirLight.position.set(20, 30, 10);
   scene.add(dirLight);
 
-  // 5. Terreno y Iluminación
   createTerrain();
 
-  // 6. Creación del Caballero Oscuro
   player = new THREE.Group();
   playerMeshGroup = createDarkKnightMesh();
   player.add(playerMeshGroup);
@@ -88,10 +78,8 @@ function init() {
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  // 7. Generación de Monstruos
   spawnEnemies(8);
 
-  // Eventos de usuario
   window.addEventListener('resize', onWindowResize, false);
   window.addEventListener('pointerdown', onPointerDown, false);
 
@@ -123,21 +111,10 @@ function showWebGLError() {
     <p style="color: #e0e0e0; max-width: 600px; line-height: 1.5;">
       Tu navegador o tarjeta gráfica no tienen habilitada la aceleración 3D por hardware (WebGL).
     </p>
-    <div style="background: rgba(255,255,255,0.05); border: 1px solid #443322; padding: 15px; border-radius: 6px; margin-top: 15px; text-align: left; color: #aaa; font-size: 14px;">
-      <strong>Cómo solucionarlo:</strong><br>
-      1. Ve a la configuración de tu navegador.<br>
-      2. Busca <strong>"Aceleración por hardware"</strong> y actívala.<br>
-      3. Si usas Chrome/Edge, ingresa a <code style="color:#ffee55;">chrome://flags</code> y habilita <strong>Override software rendering list</strong>.<br>
-      4. Reinicia el navegador.
-    </div>
   `;
 
   document.body.appendChild(errorContainer);
 }
-
-// ----------------------------------------------------
-// MODELADO Y DISEÑO DE PERSONAJES Y MONSTRUOS
-// ----------------------------------------------------
 
 function createDarkKnightMesh() {
   const group = new THREE.Group();
@@ -146,17 +123,14 @@ function createDarkKnightMesh() {
   const goldMat = new THREE.MeshStandardMaterial({ color: 0xffb700, metalness: 0.9, roughness: 0.1 });
   const skinMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c });
 
-  // Torso / Armadura de Placas
   const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 1.3, 10), armorMat);
   torso.position.y = 1.3;
   group.add(torso);
 
-  // Pechera Dorada
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.55), goldMat);
   chest.position.set(0, 1.45, 0.05);
   group.add(chest);
 
-  // Cabeza con Casco Visor
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), skinMat);
   head.position.y = 2.15;
   group.add(head);
@@ -165,7 +139,6 @@ function createDarkKnightMesh() {
   helmet.position.set(0, 2.35, 0);
   group.add(helmet);
 
-  // Hombreras
   const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), goldMat);
   shoulderL.position.set(-0.72, 1.7, 0);
   group.add(shoulderL);
@@ -174,7 +147,6 @@ function createDarkKnightMesh() {
   shoulderR.position.x = 0.72;
   group.add(shoulderR);
 
-  // Brazos y Piernas
   const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.8), armorMat);
   armL.position.set(-0.65, 1.15, 0);
   group.add(armL);
@@ -191,7 +163,6 @@ function createDarkKnightMesh() {
   legR.position.x = 0.28;
   group.add(legR);
 
-  // Alas
   playerWings = new THREE.Group();
   const wingMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444, side: THREE.DoubleSide });
   const wingL = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.0), wingMat);
@@ -205,7 +176,6 @@ function createDarkKnightMesh() {
   playerWings.add(wingL, wingR);
   group.add(playerWings);
 
-  // Espada
   playerSword = new THREE.Group();
   const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, 0.04), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 }));
   blade.position.y = 0.9;
@@ -537,7 +507,7 @@ function gainExperience(amount) {
     playerStats.hp = playerStats.maxHp;
     playerStats.mp = playerStats.maxMp;
 
-    alert(`¡LEVEL UP! Nivel ${playerStats.level}. Tienes 5 puntos de atributos (Presiona C).`);
+    showDamageText("LEVEL UP!", player.position);
   }
 
   updateHUD();
@@ -553,25 +523,24 @@ function updateHUD() {
   const gemsEl = document.getElementById('player-gems');
   if (gemsEl) gemsEl.innerText = playerStats.gems;
 
-  const hpBar = document.getElementById('hp-bar');
-  if (hpBar) {
+  const hpOrb = document.getElementById('hp-orb');
+  if (hpOrb) {
     const hpPercent = Math.max(0, (playerStats.hp / playerStats.maxHp) * 100);
-    hpBar.style.width = `${hpPercent}%`;
-    document.getElementById('hp-text').innerText = `${playerStats.hp} / ${playerStats.maxHp}`;
+    hpOrb.style.height = `${hpPercent}%`;
+    document.getElementById('hp-text').innerText = `${playerStats.hp}/${playerStats.maxHp}`;
   }
 
-  const mpBar = document.getElementById('mp-bar');
-  if (mpBar) {
+  const mpOrb = document.getElementById('mp-orb');
+  if (mpOrb) {
     const mpPercent = Math.max(0, (playerStats.mp / playerStats.maxMp) * 100);
-    mpBar.style.width = `${mpPercent}%`;
-    document.getElementById('mp-text').innerText = `${playerStats.mp} / ${playerStats.maxMp}`;
+    mpOrb.style.height = `${mpPercent}%`;
+    document.getElementById('mp-text').innerText = `${playerStats.mp}/${playerStats.maxMp}`;
   }
 
-  const expBar = document.getElementById('exp-bar');
-  if (expBar) {
+  const expFill = document.getElementById('exp-fill');
+  if (expFill) {
     const expPercent = Math.min(100, (playerStats.exp / playerStats.maxExp) * 100);
-    expBar.style.width = `${expPercent}%`;
-    document.getElementById('exp-text').innerText = `${playerStats.exp} / ${playerStats.maxExp}`;
+    expFill.style.width = `${expPercent}%`;
   }
 
   const statPts = document.getElementById('stat-points');
@@ -589,6 +558,17 @@ function updateCamera() {
     camera.position.x = player.position.x + 22;
     camera.position.z = player.position.z + 22;
   }
+}
+
+function toggleWindow(id) {
+  const win = document.getElementById(id);
+  win.style.display = (win.style.display === 'block') ? 'none' : 'block';
+}
+
+function rewardAd(event) {
+  if (event) event.stopPropagation();
+  playerStats.gems += 10;
+  updateHUD();
 }
 
 function onWindowResize() {
