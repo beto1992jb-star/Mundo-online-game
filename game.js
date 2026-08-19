@@ -1,4 +1,4 @@
-let scene, camera, renderer, player, playerMeshGroup, playerWings, skillEffect;
+let scene, camera, renderer, player, playerMeshGroup, gltfLoader;
 let targetPosition = null;
 let targetEnemy = null;
 let torches = [];
@@ -29,9 +29,9 @@ let isAttacking = false;
 let enemies = [];
 
 const ENEMY_TYPES = [
-  { type: 'spider', name: "Giant Spider", hp: 70, exp: 45, zen: 35 },
-  { type: 'dragon', name: "Budge Dragon", hp: 130, exp: 90, zen: 70 },
-  { type: 'lich', name: "Lich", hp: 200, exp: 160, zen: 120 }
+  { type: 'spider', name: "Giant Spider", hp: 70, exp: 45, zen: 35, model: 'models/spider.gltf' },
+  { type: 'dragon', name: "Budge Dragon", hp: 130, exp: 90, zen: 70, model: 'models/dragon.gltf' },
+  { type: 'lich', name: "Lich", hp: 200, exp: 160, zen: 120, model: 'models/lich.gltf' }
 ];
 
 function init() {
@@ -51,7 +51,7 @@ function init() {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x010103);
-  scene.fog = new THREE.FogExp2(0x010103, 0.022); // Niebla clásica de Lorencia
+  scene.fog = new THREE.FogExp2(0x010103, 0.022);
 
   const aspect = window.innerWidth / window.innerHeight;
   const d = 15;
@@ -59,22 +59,42 @@ function init() {
   camera.position.set(20, 22, 20);
   camera.lookAt(0, 0, 0);
 
-  // Iluminación con colores fríos y dorados
-  const ambientLight = new THREE.AmbientLight(0x332244, 1.5);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffddaa, 1.4);
+  const dirLight = new THREE.DirectionalLight(0xffddaa, 1.5);
   dirLight.position.set(15, 25, 10);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
+  gltfLoader = new THREE.GLTFLoader();
+
   createLorenciaMap();
 
   player = new THREE.Group();
-  playerMeshGroup = createDarkKnightModel();
+  playerMeshGroup = new THREE.Group();
   player.add(playerMeshGroup);
 
-  // Aura azul de ítem +11 / Excelent
+  // Cargar modelo 3D del Jugador (.gltf)
+  gltfLoader.load(
+    'models/player.gltf',
+    (gltf) => {
+      const model = gltf.scene;
+      model.scale.set(1, 1, 1); // Ajusta la escala según tu archivo exportado
+      playerMeshGroup.add(model);
+    },
+    undefined,
+    (error) => {
+      console.warn("No se encontró 'models/player.gltf'. Cargando modelo temporal.");
+      const fallback = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 2, 1),
+        new THREE.MeshStandardMaterial({ color: 0x00aaff })
+      );
+      fallback.position.y = 1;
+      playerMeshGroup.add(fallback);
+    }
+  );
+
   const auraLight = new THREE.PointLight(0x00aaff, 2.5, 10);
   auraLight.position.set(0, 1.5, 0);
   player.add(auraLight);
@@ -82,7 +102,7 @@ function init() {
   player.position.set(0, 0, 0);
   scene.add(player);
 
-  spawnEnemies(12);
+  spawnEnemies(10);
 
   window.addEventListener('resize', onWindowResize, false);
   window.addEventListener('pointerdown', onPointerDown, false);
@@ -92,7 +112,6 @@ function init() {
   animate(performance.now());
 }
 
-// MAPA DE LORENCIA CON TEXTURA ROCA/ADOQUÍN
 function createLorenciaMap() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -101,7 +120,6 @@ function createLorenciaMap() {
 
   ctx.fillStyle = '#0f0d0a';
   ctx.fillRect(0, 0, 512, 512);
-
   ctx.strokeStyle = '#050403';
   ctx.lineWidth = 8;
 
@@ -125,13 +143,13 @@ function createLorenciaMap() {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Antorchas con luz parpadeante
   const torchPositions = [[-12, -12], [12, -12], [-12, 12], [12, 12]];
   torchPositions.forEach(pos => {
     const torch = new THREE.Group();
-    const poleGeo = new THREE.CylinderGeometry(0.1, 0.18, 3, 6);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x0a0502 });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.18, 3, 6),
+      new THREE.MeshStandardMaterial({ color: 0x0a0502 })
+    );
     pole.position.y = 1.5;
 
     const fireLight = new THREE.PointLight(0xff5500, 3.0, 15);
@@ -144,129 +162,30 @@ function createLorenciaMap() {
   });
 }
 
-// PERSONAJE: DARK KNIGHT + ALAS DE DRAGÓN (EFECTO BRILLO MU)
-function createDarkKnightModel() {
-  const group = new THREE.Group();
-
-  // Material metálico brillante (Set Dragon +11)
-  const armorMat = new THREE.MeshStandardMaterial({ 
-    color: 0x051a3a, 
-    metalness: 0.9, 
-    roughness: 0.1,
-    emissive: 0x002255,
-    emissiveIntensity: 0.6
-  });
-
-  const goldMat = new THREE.MeshStandardMaterial({ 
-    color: 0xffaa00, 
-    metalness: 0.95, 
-    roughness: 0.05 
-  });
-
-  // Cuerpo
-  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.25, 1.1, 6), armorMat);
-  chest.position.y = 1.2;
-  group.add(chest);
-
-  // Hombreras Gigantes
-  const shoulderL = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 5), goldMat);
-  shoulderL.position.set(-0.65, 1.65, 0);
-  shoulderL.rotation.z = Math.PI / 3;
-
-  const shoulderR = shoulderL.clone();
-  shoulderR.position.x = 0.65;
-  shoulderR.rotation.z = -Math.PI / 3;
-  group.add(shoulderL, shoulderR);
-
-  // Casco Dragon
-  const helmet = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), armorMat);
-  helmet.position.y = 2.05;
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.12), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
-  visor.position.set(0, 2.05, 0.22);
-  group.add(helmet, visor);
-
-  // Alas de Dragón (Satan Wings) con Aditive Blending
-  playerWings = new THREE.Group();
-  const wingShape = new THREE.Shape();
-  wingShape.moveTo(0, 0);
-  wingShape.lineTo(1.6, 2.0);
-  wingShape.lineTo(2.6, 1.3);
-  wingShape.lineTo(1.9, 0.2);
-  wingShape.lineTo(2.4, -0.7);
-  wingShape.lineTo(0, 0);
-
-  const wingGeo = new THREE.ShapeGeometry(wingShape);
-  const wingMat = new THREE.MeshBasicMaterial({ 
-    color: 0xff1100, 
-    side: THREE.DoubleSide, 
-    transparent: true, 
-    opacity: 0.8,
-    blending: THREE.AdditiveBlending 
-  });
-
-  const wingL = new THREE.Mesh(wingGeo, wingMat);
-  wingL.position.set(-0.1, 1.4, -0.2);
-  wingL.rotation.y = Math.PI / 3.2;
-
-  const wingR = new THREE.Mesh(wingGeo, wingMat);
-  wingR.position.set(0.1, 1.4, -0.2);
-  wingR.scale.x = -1;
-  wingR.rotation.y = -Math.PI / 3.2;
-
-  playerWings.add(wingL, wingR);
-  group.add(playerWings);
-
-  // Efecto Twisting Slash (Skill de DK)
-  const skillGeo = new THREE.TorusGeometry(1.8, 0.15, 8, 24);
-  const skillMat = new THREE.MeshBasicMaterial({ 
-    color: 0x00ffff, 
-    transparent: true, 
-    opacity: 0,
-    blending: THREE.AdditiveBlending 
-  });
-  skillEffect = new THREE.Mesh(skillGeo, skillMat);
-  skillEffect.rotation.x = Math.PI / 2;
-  skillEffect.position.y = 1.0;
-  group.add(skillEffect);
-
-  return group;
-}
-
-function createSpiderModel() {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), new THREE.MeshStandardMaterial({ color: 0x990000, roughness: 0.4 }));
-  body.position.y = 0.5;
-  group.add(body);
-  return group;
-}
-
-function createDragonModel() {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.65, 1.8, 5), new THREE.MeshStandardMaterial({ color: 0x660099, metalness: 0.3 }));
-  body.rotation.x = Math.PI / 2.2;
-  body.position.y = 0.9;
-  group.add(body);
-  return group;
-}
-
-function createLichModel() {
-  const group = new THREE.Group();
-  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.75, 2.0, 6), new THREE.MeshStandardMaterial({ color: 0x003311 }));
-  robe.position.y = 1.0;
-  group.add(robe);
-  return group;
-}
-
 function spawnEnemy(x, z) {
   const enemyData = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
-  let mesh;
+  const enemyGroup = new THREE.Group();
 
-  if (enemyData.type === 'spider') mesh = createSpiderModel();
-  else if (enemyData.type === 'dragon') mesh = createDragonModel();
-  else mesh = createLichModel();
+  gltfLoader.load(
+    enemyData.model,
+    (gltf) => {
+      const model = gltf.scene;
+      model.scale.set(1, 1, 1);
+      enemyGroup.add(model);
+    },
+    undefined,
+    () => {
+      const fallback = new THREE.Mesh(
+        new THREE.SphereGeometry(0.8),
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+      );
+      fallback.position.y = 0.8;
+      enemyGroup.add(fallback);
+    }
+  );
 
-  mesh.position.set(x, 0, z);
-  mesh.userData = {
+  enemyGroup.position.set(x, 0, z);
+  enemyGroup.userData = {
     id: Math.random(),
     name: enemyData.name,
     hp: enemyData.hp,
@@ -275,8 +194,8 @@ function spawnEnemy(x, z) {
     zenReward: enemyData.zen
   };
 
-  scene.add(mesh);
-  enemies.push(mesh);
+  scene.add(enemyGroup);
+  enemies.push(enemyGroup);
 }
 
 function spawnEnemies(count) {
@@ -369,11 +288,6 @@ function animate(time) {
     t.intensity = 2.5 + Math.sin(time * 0.015 + Math.random() * 0.2) * 0.6;
   });
 
-  if (playerWings) {
-    playerWings.children[0].rotation.y = (Math.PI / 3.2) + Math.sin(time * 0.008) * 0.15;
-    playerWings.children[1].rotation.y = -(Math.PI / 3.2) - Math.sin(time * 0.008) * 0.15;
-  }
-
   for (let i = particles.length - 1; i >= 0; i--) {
     particles[i].life -= 0.07;
     particles[i].mesh.scale.multiplyScalar(1.05);
@@ -415,19 +329,10 @@ function animate(time) {
     }
   }
 
-  enemies.forEach((enemy, idx) => {
-    enemy.rotation.y += 0.012;
-    enemy.position.y = Math.sin(time * 0.005 + idx) * 0.08;
-  });
-
-  // Animación del Twisting Slash al atacar
   if (isAttacking) {
-    playerMeshGroup.rotation.y += 0.45; // Giro 360 estilo MU
-    skillEffect.material.opacity = 0.9;
-    skillEffect.rotation.z += 0.3;
+    playerMeshGroup.rotation.y += 0.45;
     if (playerMeshGroup.rotation.y > Math.PI * 2) {
       isAttacking = false;
-      skillEffect.material.opacity = 0;
     }
   }
 
